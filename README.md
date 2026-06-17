@@ -51,3 +51,5 @@ AGRI-ASSIST-AI/
 ## License
 
 This project is developed as part of SIP 2026 (Summer Internship Programme).
+Week 3 Deliverables Completed
+yes
