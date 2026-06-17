@@ -12,7 +12,7 @@ function Card({ icon: Icon, title, description, index = 0 }) {
         ease: [0.22, 1, 0.36, 1],
       }}
       whileHover={{ y: -8 }}
-      className="group glass relative overflow-hidden rounded-2xl p-6 shadow-lg shadow-agri-900/5 transition-shadow duration-300 hover:shadow-xl hover:shadow-agri-600/10 sm:p-8"
+      className="group glass relative overflow-hidden rounded-2xl p-6 shadow-lg shadow-agri-900/5 transition-shadow duration-300 hover:shadow-xl hover:shadow-agri-600/10 dark:shadow-black/20 sm:p-8"
     >
       <div className="absolute -right-6 -top-6 h-24 w-24 rounded-full bg-agri-400/10 transition-transform duration-500 group-hover:scale-150" />
 
@@ -21,8 +21,8 @@ function Card({ icon: Icon, title, description, index = 0 }) {
           <Icon className="h-7 w-7" />
         </div>
 
-        <h3 className="text-xl font-bold text-slate-900">{title}</h3>
-        <p className="mt-3 text-sm leading-relaxed text-slate-600 sm:text-base">
+        <h3 className="text-xl font-bold text-slate-900 dark:text-white">{title}</h3>
+        <p className="mt-3 text-sm leading-relaxed text-slate-600 dark:text-slate-400 sm:text-base">
           {description}
         </p>
 
