@@ -1,3 +1,4 @@
+import { useState, useEffect } from 'react'
 import { motion } from 'framer-motion'
 import {
   Activity,
@@ -11,13 +12,10 @@ import {
 } from 'lucide-react'
 import Navbar from '../components/Navbar'
 import Footer from '../components/Footer'
+import { Loader } from '../components/ui'
+import { dashboardAPI, authAPI } from '../services/api'
+import toast from 'react-hot-toast'
 
-const stats = [
-  { label: 'Active Queries', value: '24', icon: MessageSquare, change: '+12%' },
-  { label: 'Crops Monitored', value: '8', icon: Sprout, change: '+2' },
-  { label: 'Health Score', value: '87%', icon: Activity, change: '+5%' },
-  { label: 'Yield Forecast', value: '4.2t', icon: TrendingUp, change: '+8%' },
-]
 
 const quickInsights = [
   {
@@ -47,6 +45,63 @@ const recentActivity = [
 ]
 
 function Dashboard() {
+  const [loading, setLoading] = useState(true)
+  const [stats, setStats] = useState([
+    { label: 'Active Queries', value: '0', icon: MessageSquare, change: '+0%' },
+    { label: 'Crops Monitored', value: '0', icon: Sprout, change: '+0' },
+    { label: 'Health Score', value: '0%', icon: Activity, change: '+0%' },
+    { label: 'Yield Forecast', value: '0t', icon: TrendingUp, change: '+0%' },
+  ])
+  const [userStats, setUserStats] = useState(null)
+
+  useEffect(() => {
+    const fetchDashboardData = async () => {
+      if (!authAPI.isAuthenticated()) {
+        setLoading(false)
+        return
+      }
+
+      try {
+        const [statsResponse, userStatsResponse] = await Promise.all([
+          dashboardAPI.getStats(),
+          dashboardAPI.getUserStats()
+        ])
+
+        if (statsResponse.success) {
+          const data = statsResponse.data
+          setStats([
+            { label: 'Total Queries', value: data.totalQueries.toString(), icon: MessageSquare, change: `+${data.recentQueries}` },
+            { label: 'Crop Reports', value: data.totalCropReports.toString(), icon: Sprout, change: '+0' },
+            { label: 'Total Users', value: data.totalUsers.toString(), icon: Activity, change: '+0%' },
+            { label: 'Most Common Crop', value: data.mostCommonCrop, icon: TrendingUp, change: '+0%' },
+          ])
+        }
+
+        if (userStatsResponse.success) {
+          setUserStats(userStatsResponse.data)
+        }
+      } catch (error) {
+        console.error('Failed to fetch dashboard data:', error)
+        toast.error('Failed to load dashboard data')
+      } finally {
+        setLoading(false)
+      }
+    }
+
+    fetchDashboardData()
+  }, [])
+
+  if (loading) {
+    return (
+      <div className="flex min-h-screen flex-col bg-slate-50/50 transition-colors duration-300 dark:bg-zinc-950">
+        <Navbar />
+        <main className="flex flex-1 items-center justify-center">
+          <Loader className="h-12 w-12" />
+        </main>
+      </div>
+    )
+  }
+
   return (
     <div className="flex min-h-screen flex-col bg-slate-50/50 transition-colors duration-300 dark:bg-zinc-950">
       <Navbar />
@@ -65,7 +120,7 @@ function Dashboard() {
             </h1>
             <p className="mt-3 max-w-2xl text-sm leading-relaxed text-slate-600 dark:text-slate-400 sm:mt-4 sm:text-base">
               Your central hub for crop health monitoring, AI advisory history, and
-              farming analytics. Real-time insights will populate once connected to the backend.
+              farming analytics.
             </p>
           </motion.div>
 

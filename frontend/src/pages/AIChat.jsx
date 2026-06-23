@@ -3,61 +3,74 @@ import { motion } from 'framer-motion'
 import { Bot, Send, User } from 'lucide-react'
 import Navbar from '../components/Navbar'
 import Footer from '../components/Footer'
-import { Button, Input } from '../components/ui'
+import { Button, Input, Loader } from '../components/ui'
+import { advisoryAPI, authAPI } from '../services/api'
+import toast from 'react-hot-toast'
 
 const initialMessages = [
   {
     id: 1,
     role: 'assistant',
     content:
-      'Hello! I\'m your AGRI ASSIST AI advisor. Ask me about crop diseases, pest management, soil health, or best farming practices.',
-  },
-  {
-    id: 2,
-    role: 'user',
-    content: 'What are the signs of nitrogen deficiency in maize?',
-  },
-  {
-    id: 3,
-    role: 'assistant',
-    content:
-      'Nitrogen deficiency in maize typically shows as yellowing starting from the tip of lower leaves, progressing along the midrib in a V-shape pattern. Plants may appear stunted with reduced yield. Consider soil testing and applying nitrogen-rich fertilizer during the vegetative stage.',
+      'Hello! I\'m your AGRI ASSIST AI advisor. Please provide the crop name and issue you\'re experiencing to get personalized advice.',
   },
 ]
 
 function AIChat() {
   const [messages, setMessages] = useState(initialMessages)
-  const [input, setInput] = useState('')
+  const [crop, setCrop] = useState('')
+  const [issue, setIssue] = useState('')
+  const [loading, setLoading] = useState(false)
   const messagesEndRef = useRef(null)
 
   useEffect(() => {
     messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' })
   }, [messages])
 
-  const handleSend = (e) => {
+  const handleSend = async (e) => {
     e.preventDefault()
-    if (!input.trim()) return
+    if (!crop.trim() || !issue.trim() || loading) return
+
+    if (!authAPI.isAuthenticated()) {
+      toast.error('Please login to use AI advisory')
+      return
+    }
 
     const userMessage = {
       id: Date.now(),
       role: 'user',
-      content: input.trim(),
+      content: `Crop: ${crop}\nIssue: ${issue}`,
     }
 
     setMessages((prev) => [...prev, userMessage])
-    setInput('')
+    setCrop('')
+    setIssue('')
+    setLoading(true)
 
-    setTimeout(() => {
+    try {
+      const response = await advisoryAPI.submitQuery({ crop: crop.trim(), issue: issue.trim() })
+
+      if (response.success) {
+        const assistantMessage = {
+          id: Date.now() + 1,
+          role: 'assistant',
+          content: `**Diagnosis:** ${response.data.diagnosis}\n\n**Recommendation:** ${response.data.recommendation}`,
+        }
+        setMessages((prev) => [...prev, assistantMessage])
+      }
+    } catch (error) {
+      toast.error(error.message || 'Failed to get AI response')
       setMessages((prev) => [
         ...prev,
         {
           id: Date.now() + 1,
           role: 'assistant',
-          content:
-            'Thank you for your question! Full AI responses will be available once the backend is connected. For now, always verify critical advice with a certified agricultural expert.',
+          content: 'Sorry, I encountered an error processing your request. Please try again.',
         },
       ])
-    }, 800)
+    } finally {
+      setLoading(false)
+    }
   }
 
   return (
@@ -96,6 +109,12 @@ function AIChat() {
             </div>
 
             <div className="flex-1 space-y-4 overflow-y-auto px-4 py-4 sm:px-6 sm:py-6" style={{ minHeight: '300px', maxHeight: 'calc(100vh - 320px)' }}>
+              {loading && (
+                <div className="flex items-center gap-3">
+                  <Loader className="h-5 w-5" />
+                  <span className="text-sm text-slate-500 dark:text-slate-400">Analyzing...</span>
+                </div>
+              )}
               {messages.map((msg) => (
                 <motion.div
                   key={msg.id}
@@ -133,20 +152,30 @@ function AIChat() {
 
             <form
               onSubmit={handleSend}
-              className="flex items-end gap-2 border-t border-slate-200 p-3 dark:border-zinc-700 sm:gap-3 sm:p-4"
+              className="border-t border-slate-200 p-3 dark:border-zinc-700 sm:p-4"
             >
-              <div className="flex-1">
+              <div className="mb-3">
                 <Input
-                  placeholder="Ask about crops, diseases, or farming..."
-                  value={input}
-                  onChange={(e) => setInput(e.target.value)}
-                  aria-label="Chat message"
+                  placeholder="Crop name (e.g., Rice, Wheat, Corn)"
+                  value={crop}
+                  onChange={(e) => setCrop(e.target.value)}
+                  aria-label="Crop name"
                 />
               </div>
-              <Button type="submit" size="md" className="shrink-0 !px-4">
-                <Send className="h-4 w-4" />
-                <span className="sr-only sm:not-sr-only sm:ml-1">Send</span>
-              </Button>
+              <div className="mb-3">
+                <Input
+                  placeholder="Describe the issue (e.g., Brown spots on leaves)"
+                  value={issue}
+                  onChange={(e) => setIssue(e.target.value)}
+                  aria-label="Issue description"
+                />
+              </div>
+              <div className="flex justify-end">
+                <Button type="submit" size="md" className="!px-6" disabled={loading}>
+                  {loading ? <Loader className="h-4 w-4" /> : <Send className="h-4 w-4" />}
+                  <span className="ml-2">Get Advisory</span>
+                </Button>
+              </div>
             </form>
           </div>
         </div>

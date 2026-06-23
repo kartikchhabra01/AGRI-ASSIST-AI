@@ -3,6 +3,7 @@ import Home from './pages/Home'
 import About from './pages/About'
 import Dashboard from './pages/Dashboard'
 import Login from './pages/Login'
+import Register from './pages/Register'
 import ComponentShowcase from './pages/ComponentShowcase'
 import AIChat from './pages/AIChat'
 
@@ -13,6 +14,7 @@ function App() {
       <Route path="/about" element={<About />} />
       <Route path="/dashboard" element={<Dashboard />} />
       <Route path="/login" element={<Login />} />
+      <Route path="/register" element={<Register />} />
       <Route path="/components" element={<ComponentShowcase />} />
       <Route path="/chat" element={<AIChat />} />
     </Routes>
