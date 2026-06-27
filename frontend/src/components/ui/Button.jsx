@@ -31,6 +31,10 @@ function Button({
       'bg-agri-100 text-agri-800 hover:bg-agri-200 dark:bg-agri-900/40 dark:text-agri-300 dark:hover:bg-agri-900/60 hover:-translate-y-0.5 active:translate-y-0',
     outline:
       'border-2 border-agri-500 text-agri-700 bg-transparent hover:bg-agri-50 dark:text-agri-400 dark:border-agri-500 dark:hover:bg-agri-950/50 hover:-translate-y-0.5 active:translate-y-0',
+    destructive:
+      'bg-red-600 text-white shadow-md shadow-red-600/25 hover:bg-red-700 hover:shadow-lg hover:-translate-y-0.5 active:translate-y-0',
+    ghost:
+      'text-slate-700 hover:bg-slate-100 dark:text-slate-300 dark:hover:bg-zinc-800 hover:-translate-y-0.5 active:translate-y-0',
   }
 
   const sizes = {

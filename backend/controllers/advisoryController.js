@@ -143,9 +143,144 @@ const searchQueries = async (req, res, next) => {
   }
 };
 
+/**
+ * Update a query
+ * PUT /api/advisory/:id (protected)
+ */
+const updateQuery = async (req, res, next) => {
+  try {
+    const { id } = req.params;
+    const { crop, issue } = req.body;
+    const userId = req.userId;
+
+    // Find the query
+    const query = db.queries.findById(id);
+
+    if (!query) {
+      return res.status(404).json({
+        success: false,
+        message: 'Query not found'
+      });
+    }
+
+    // Check if user owns this query
+    if (query.userId !== userId) {
+      return res.status(403).json({
+        success: false,
+        message: 'Access denied'
+      });
+    }
+
+    // Validate input if provided
+    if (crop || issue) {
+      const validation = Query.validate({ 
+        userId, 
+        crop: crop || query.crop, 
+        issue: issue || query.issue 
+      });
+      if (!validation.isValid) {
+        return res.status(400).json({
+          success: false,
+          message: 'Validation failed',
+          errors: validation.errors
+        });
+      }
+    }
+
+    // Update query
+    const updates = {};
+    if (crop) updates.crop = crop;
+    if (issue) updates.issue = issue;
+
+    // If crop or issue changed, get new AI diagnosis
+    if (crop !== query.crop || issue !== query.issue) {
+      const aiResponse = await getDiagnosis(crop || query.crop, issue || query.issue);
+      updates.diagnosis = aiResponse.diagnosis;
+      updates.recommendation = aiResponse.recommendation;
+    }
+
+    const updatedQuery = db.queries.update(id, updates);
+
+    res.status(200).json({
+      success: true,
+      message: 'Query updated successfully',
+      data: updatedQuery
+    });
+  } catch (error) {
+    next(error);
+  }
+};
+
+/**
+ * Delete a query
+ * DELETE /api/advisory/:id (protected)
+ */
+const deleteQuery = async (req, res, next) => {
+  try {
+    const { id } = req.params;
+    const userId = req.userId;
+
+    // Find the query
+    const query = db.queries.findById(id);
+
+    if (!query) {
+      return res.status(404).json({
+        success: false,
+        message: 'Query not found'
+      });
+    }
+
+    // Check if user owns this query
+    if (query.userId !== userId) {
+      return res.status(403).json({
+        success: false,
+        message: 'Access denied'
+      });
+    }
+
+    // Delete query
+    db.queries.delete(id);
+
+    res.status(200).json({
+      success: true,
+      message: 'Query deleted successfully'
+    });
+  } catch (error) {
+    next(error);
+  }
+};
+
+/**
+ * Delete all queries for current user
+ * DELETE /api/advisory/all (protected)
+ */
+const deleteAllQueries = async (req, res, next) => {
+  try {
+    const userId = req.userId;
+
+    // Get all user queries
+    const userQueries = db.queries.findByUserId(userId);
+
+    // Delete all queries
+    userQueries.forEach(query => {
+      db.queries.delete(query.id);
+    });
+
+    res.status(200).json({
+      success: true,
+      message: `Deleted ${userQueries.length} queries successfully`
+    });
+  } catch (error) {
+    next(error);
+  }
+};
+
 module.exports = {
   submitQuery,
   getHistory,
   getQueryById,
-  searchQueries
+  searchQueries,
+  updateQuery,
+  deleteQuery,
+  deleteAllQueries
 };

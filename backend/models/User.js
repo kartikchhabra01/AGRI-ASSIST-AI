@@ -10,6 +10,8 @@ class User {
     this.email = data.email;
     this.password = data.password; // Hashed password
     this.location = data.location || null;
+    this.farmLocation = data.farmLocation || null;
+    this.cropType = data.cropType || null;
     this.createdAt = data.createdAt || new Date().toISOString();
   }
 
@@ -48,6 +50,8 @@ class User {
       name: this.name,
       email: this.email,
       location: this.location,
+      farmLocation: this.farmLocation,
+      cropType: this.cropType,
       createdAt: this.createdAt
     };
   }

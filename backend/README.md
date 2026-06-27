@@ -65,6 +65,9 @@ The server will start on `http://localhost:5000`
 - `POST /api/auth/register` - Register a new user
 - `POST /api/auth/login` - Login user
 - `GET /api/auth/me` - Get current user (protected)
+- `PUT /api/auth/profile` - Update user profile (protected)
+- `PUT /api/auth/password` - Change password (protected)
+- `DELETE /api/auth/account` - Delete user account (protected)
 
 ### Advisory
 
@@ -72,6 +75,9 @@ The server will start on `http://localhost:5000`
 - `GET /api/advisory/history` - Get query history (protected)
 - `GET /api/advisory/history/:id` - Get specific query (protected)
 - `GET /api/advisory/search?q=` - Search queries (protected)
+- `PUT /api/advisory/:id` - Update query (protected)
+- `DELETE /api/advisory/:id` - Delete query (protected)
+- `DELETE /api/advisory/all` - Delete all queries (protected)
 
 ### Crop Health
 

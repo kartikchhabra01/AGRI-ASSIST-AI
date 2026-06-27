@@ -90,6 +90,41 @@ export const authAPI = {
   isAuthenticated: () => {
     return !!localStorage.getItem('token');
   },
+
+  updateProfile: async (profileData) => {
+    const response = await request('/auth/profile', {
+      method: 'PUT',
+      body: JSON.stringify(profileData),
+    });
+    
+    // Update user in localStorage if successful
+    if (response.success && response.data.user) {
+      localStorage.setItem('user', JSON.stringify(response.data.user));
+    }
+    
+    return response;
+  },
+
+  changePassword: async (passwordData) => {
+    return request('/auth/password', {
+      method: 'PUT',
+      body: JSON.stringify(passwordData),
+    });
+  },
+
+  deleteAccount: async () => {
+    const response = await request('/auth/account', {
+      method: 'DELETE',
+    });
+    
+    // Clear localStorage if successful
+    if (response.success) {
+      localStorage.removeItem('token');
+      localStorage.removeItem('user');
+    }
+    
+    return response;
+  },
 };
 
 /**
@@ -113,6 +148,25 @@ export const advisoryAPI = {
 
   searchQueries: async (query) => {
     return request(`/advisory/search?q=${encodeURIComponent(query)}`);
+  },
+
+  updateQuery: async (id, queryData) => {
+    return request(`/advisory/${id}`, {
+      method: 'PUT',
+      body: JSON.stringify(queryData),
+    });
+  },
+
+  deleteQuery: async (id) => {
+    return request(`/advisory/${id}`, {
+      method: 'DELETE',
+    });
+  },
+
+  deleteAllQueries: async () => {
+    return request('/advisory/all', {
+      method: 'DELETE',
+    });
   },
 };
 
