@@ -8,35 +8,45 @@ AGRI ASSIST AI is a full-stack web application designed to provide instant agric
 
 ## Features
 
-- **AI-Powered Advisory**: Chat interface for crop disease diagnosis and recommendations
-- **User Authentication**: Secure registration and login with JWT tokens
-- **Query History**: Track all advisory queries with AI responses
-- **Profile Management**: Update user details, farm location, and crop type
-- **Account Settings**: Change password and delete account with confirmation
-- **Dashboard Analytics**: View statistics on queries, reports, and activity
-- **Crop Health Reports**: Submit and track crop health reports
-- **Responsive Design**: Mobile-first interface with dark/light mode
-- **CRUD Operations**: Full Create, Read, Update, Delete functionality for all data
+- AI-powered crop advisory chatbot with disease diagnosis
+- Secure user authentication with JWT tokens
+- Query history with AI-generated recommendations
+- Profile management (name, farm location, crop type)
+- Account settings (password change, account deletion)
+- Dashboard analytics and statistics
+- Crop health reporting and tracking
+- Responsive mobile-first design with dark/light mode
+- Full CRUD operations for all data entities
 
 ## Tech Stack
 
 ### Frontend
-- **React.js** - UI framework
-- **Tailwind CSS** - Styling
-- **React Router** - Client-side routing
-- **Axios** - HTTP client for API calls
-- **Framer Motion** - Animations
-- **Lucide React** - Icons
-- **React Hot Toast** - Notifications
+- React.js - UI framework
+- Tailwind CSS - Styling
+- React Router - Client-side routing
+- Axios - HTTP client
+- Framer Motion - Animations
+- Lucide React - Icons
+- React Hot Toast - Notifications
 
 ### Backend
-- **Node.js** - Runtime environment
-- **Express.js** - Web framework
-- **MongoDB Atlas** - Cloud database
-- **Mongoose** - ODM for MongoDB
-- **JWT** - Authentication tokens
-- **bcryptjs** - Password hashing
-- **Google Gemini API** - AI advisory generation
+- Node.js - Runtime environment
+- Express.js - Web framework
+
+### Database
+- MongoDB Atlas - Cloud database
+- Mongoose - ODM for MongoDB
+
+### Authentication
+- JWT - Token-based authentication
+- bcryptjs - Password hashing
+
+### AI Integration
+- Google Gemini API - AI advisory generation
+
+### Deployment
+- Vercel - Frontend hosting
+- Render - Backend hosting
 
 ## Folder Structure
 
@@ -135,7 +145,6 @@ JWT_SECRET=your_jwt_secret_key_here
 GEMINI_API_KEY=your_gemini_api_key_here
 CORS_ORIGIN=http://localhost:5173
 MONGO_URI=mongodb+srv://username:password@cluster.mongodb.net/database?retryWrites=true&w=majority
-OPENAI_API_KEY=your_openai_api_key_here
 ```
 
 5. Start the backend server:
@@ -174,7 +183,6 @@ The frontend will run on `http://localhost:5173`
 | GEMINI_API_KEY | Google Gemini API key for AI advisory | Yes |
 | CORS_ORIGIN | Frontend URL for CORS configuration | Yes |
 | MONGO_URI | MongoDB Atlas connection string | Yes |
-| OPENAI_API_KEY | OpenAI API key (optional) | No |
 
 ## API Routes
 
@@ -334,11 +342,33 @@ The frontend will run on `http://localhost:5173`
 
 ## Screenshots
 
-*Screenshots will be added here as the project progresses*
+### CRUD Verification
+- Profile update functionality
+- Password change with verification
+- Account deletion with confirmation
+- Advisory query editing and deletion
+
+### Database Integration
+- MongoDB Atlas connection
+- Data persistence across sessions
+- Query history storage
+- Crop health reports tracking
+
+### AI Advisory Chat
+- Chat interface for crop queries
+- AI-generated disease diagnosis
+- Context-aware recommendations
+- Query history with responses
+
+### Dashboard Analytics
+- User activity statistics
+- Query and report counts
+- Recent activity tracking
+- Crop and disease insights
 
 ## Future Improvements
 
-- **Gemini API Integration**: Complete AI advisory generation with crop disease diagnosis
+- **Enhance Gemini API**: Crop-specific intelligent recommendations with disease diagnosis
 - **Multilingual Support**: Add Hindi and other regional language support
 - **Weather APIs**: Integrate weather data for context-aware recommendations
 - **Image Recognition**: Allow users to upload crop images for disease detection
@@ -346,7 +376,7 @@ The frontend will run on `http://localhost:5173`
 - **Mobile App**: Develop native mobile applications (iOS/Android)
 - **Offline Mode**: Enable offline functionality with data synchronization
 - **Real-time Notifications**: Push notifications for urgent crop alerts
-- **Analytics Dashboard**: Advanced analytics for farmers and administrators
+- **Advanced Analytics**: Enhanced analytics for farmers and administrators
 
 ## License
 
