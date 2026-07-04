@@ -4,8 +4,9 @@
  */
 
 const bcrypt = require('bcryptjs');
-const db = require('../config/db');
 const User = require('../models/User');
+const Query = require('../models/Query');
+const CropHealth = require('../models/CropHealth');
 const generateToken = require('../utils/generateToken');
 
 /**
@@ -16,18 +17,8 @@ const register = async (req, res, next) => {
   try {
     const { name, email, password, location } = req.body;
 
-    // Validate input
-    const validation = User.validate({ name, email, password });
-    if (!validation.isValid) {
-      return res.status(400).json({
-        success: false,
-        message: 'Validation failed',
-        errors: validation.errors
-      });
-    }
-
     // Check if user already exists
-    const existingUser = db.users.findByEmail(email);
+    const existingUser = await User.findOne({ email });
     if (existingUser) {
       return res.status(400).json({
         success: false,
@@ -40,33 +31,33 @@ const register = async (req, res, next) => {
     const hashedPassword = await bcrypt.hash(password, salt);
 
     // Create user
-    const userData = {
+    const newUser = await User.create({
       name,
       email,
       password: hashedPassword,
       location: location || null
-    };
-
-    const newUser = db.users.create(userData);
+    });
 
     // Generate token
-    const token = generateToken(newUser.id);
+    const token = generateToken(newUser._id);
 
     // Return response
     res.status(201).json({
       success: true,
       message: 'User registered successfully',
       data: {
-        user: {
-          id: newUser.id,
-          name: newUser.name,
-          email: newUser.email,
-          location: newUser.location
-        },
+        user: newUser,
         token
       }
     });
   } catch (error) {
+    if (error.name === 'ValidationError') {
+      return res.status(400).json({
+        success: false,
+        message: 'Validation failed',
+        errors: Object.values(error.errors).map(e => e.message)
+      });
+    }
     next(error);
   }
 };
@@ -88,7 +79,7 @@ const login = async (req, res, next) => {
     }
 
     // Check if user exists
-    const user = db.users.findByEmail(email);
+    const user = await User.findOne({ email });
     if (!user) {
       return res.status(401).json({
         success: false,
@@ -106,19 +97,14 @@ const login = async (req, res, next) => {
     }
 
     // Generate token
-    const token = generateToken(user.id);
+    const token = generateToken(user._id);
 
     // Return response
     res.status(200).json({
       success: true,
       message: 'Login successful',
       data: {
-        user: {
-          id: user.id,
-          name: user.name,
-          email: user.email,
-          location: user.location
-        },
+        user: user,
         token
       }
     });
@@ -133,7 +119,7 @@ const login = async (req, res, next) => {
  */
 const getMe = async (req, res, next) => {
   try {
-    const user = db.users.findById(req.userId);
+    const user = await User.findById(req.userId);
     
     if (!user) {
       return res.status(404).json({
@@ -145,15 +131,7 @@ const getMe = async (req, res, next) => {
     res.status(200).json({
       success: true,
       data: {
-        user: {
-          id: user.id,
-          name: user.name,
-          email: user.email,
-          location: user.location,
-          farmLocation: user.farmLocation || null,
-          cropType: user.cropType || null,
-          createdAt: user.createdAt
-        }
+        user
       }
     });
   } catch (error) {
@@ -171,7 +149,7 @@ const updateProfile = async (req, res, next) => {
     const userId = req.userId;
 
     // Find user
-    const user = db.users.findById(userId);
+    const user = await User.findById(userId);
     if (!user) {
       return res.status(404).json({
         success: false,
@@ -185,21 +163,17 @@ const updateProfile = async (req, res, next) => {
     if (farmLocation !== undefined) updates.farmLocation = farmLocation;
     if (cropType !== undefined) updates.cropType = cropType;
 
-    const updatedUser = db.users.update(userId, updates);
+    const updatedUser = await User.findByIdAndUpdate(
+      userId,
+      updates,
+      { new: true, runValidators: true }
+    );
 
     res.status(200).json({
       success: true,
       message: 'Profile updated successfully',
       data: {
-        user: {
-          id: updatedUser.id,
-          name: updatedUser.name,
-          email: updatedUser.email,
-          location: updatedUser.location,
-          farmLocation: updatedUser.farmLocation,
-          cropType: updatedUser.cropType,
-          createdAt: updatedUser.createdAt
-        }
+        user: updatedUser
       }
     });
   } catch (error) {
@@ -232,7 +206,7 @@ const changePassword = async (req, res, next) => {
     }
 
     // Find user
-    const user = db.users.findById(userId);
+    const user = await User.findById(userId);
     if (!user) {
       return res.status(404).json({
         success: false,
@@ -254,7 +228,7 @@ const changePassword = async (req, res, next) => {
     const hashedPassword = await bcrypt.hash(newPassword, salt);
 
     // Update password
-    db.users.update(userId, { password: hashedPassword });
+    await User.findByIdAndUpdate(userId, { password: hashedPassword });
 
     res.status(200).json({
       success: true,
@@ -274,7 +248,7 @@ const deleteAccount = async (req, res, next) => {
     const userId = req.userId;
 
     // Find user
-    const user = db.users.findById(userId);
+    const user = await User.findById(userId);
     if (!user) {
       return res.status(404).json({
         success: false,
@@ -283,19 +257,13 @@ const deleteAccount = async (req, res, next) => {
     }
 
     // Delete user's queries
-    const userQueries = db.queries.findByUserId(userId);
-    userQueries.forEach(query => {
-      db.queries.delete(query.id);
-    });
+    await Query.deleteMany({ userId });
 
     // Delete user's crop reports
-    const userReports = db.cropReports.findByUserId(userId);
-    userReports.forEach(report => {
-      db.cropReports.delete(report.id);
-    });
+    await CropHealth.deleteMany({ userId });
 
     // Delete user
-    db.users.delete(userId);
+    await User.findByIdAndDelete(userId);
 
     res.status(200).json({
       success: true,

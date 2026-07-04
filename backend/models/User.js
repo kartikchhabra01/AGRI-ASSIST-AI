@@ -1,60 +1,57 @@
 /**
  * User Model
- * Defines the structure and validation for user data
+ * Mongoose schema for user data
  */
 
-class User {
-  constructor(data) {
-    this.id = data.id;
-    this.name = data.name;
-    this.email = data.email;
-    this.password = data.password; // Hashed password
-    this.location = data.location || null;
-    this.farmLocation = data.farmLocation || null;
-    this.cropType = data.cropType || null;
-    this.createdAt = data.createdAt || new Date().toISOString();
+const mongoose = require('mongoose');
+
+const userSchema = new mongoose.Schema({
+  name: {
+    type: String,
+    required: [true, 'Name is required'],
+    trim: true,
+    minlength: [2, 'Name must be at least 2 characters long']
+  },
+  email: {
+    type: String,
+    required: [true, 'Email is required'],
+    unique: true,
+    lowercase: true,
+    trim: true,
+    match: [/^\S+@\S+\.\S+$/, 'Please enter a valid email address']
+  },
+  password: {
+    type: String,
+    required: [true, 'Password is required'],
+    minlength: [6, 'Password must be at least 6 characters long']
+  },
+  location: {
+    type: String,
+    default: null
+  },
+  farmLocation: {
+    type: String,
+    default: null
+  },
+  cropType: {
+    type: String,
+    default: null
+  },
+  createdAt: {
+    type: Date,
+    default: Date.now
   }
+}, {
+  timestamps: true
+});
 
-  // Validate user data
-  static validate(data) {
-    const errors = [];
+// Method to remove password from JSON output
+userSchema.methods.toJSON = function() {
+  const user = this.toObject();
+  delete user.password;
+  return user;
+};
 
-    if (!data.name || data.name.trim().length < 2) {
-      errors.push('Name must be at least 2 characters long');
-    }
-
-    if (!data.email || !this.isValidEmail(data.email)) {
-      errors.push('Invalid email address');
-    }
-
-    if (!data.password || data.password.length < 6) {
-      errors.push('Password must be at least 6 characters long');
-    }
-
-    return {
-      isValid: errors.length === 0,
-      errors
-    };
-  }
-
-  // Email validation helper
-  static isValidEmail(email) {
-    const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
-    return emailRegex.test(email);
-  }
-
-  // Sanitize user data (remove sensitive info)
-  toJSON() {
-    return {
-      id: this.id,
-      name: this.name,
-      email: this.email,
-      location: this.location,
-      farmLocation: this.farmLocation,
-      cropType: this.cropType,
-      createdAt: this.createdAt
-    };
-  }
-}
+const User = mongoose.model('User', userSchema);
 
 module.exports = User;

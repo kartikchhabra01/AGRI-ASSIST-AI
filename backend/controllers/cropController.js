@@ -3,7 +3,6 @@
  * Handles crop health reports
  */
 
-const db = require('../config/db');
 const CropHealth = require('../models/CropHealth');
 
 /**
@@ -15,26 +14,14 @@ const submitReport = async (req, res, next) => {
     const { crop, disease, severity, affectedArea } = req.body;
     const userId = req.userId;
 
-    // Validate input
-    const validation = CropHealth.validate({ userId, crop, disease, severity });
-    if (!validation.isValid) {
-      return res.status(400).json({
-        success: false,
-        message: 'Validation failed',
-        errors: validation.errors
-      });
-    }
-
     // Create report
-    const reportData = {
+    const savedReport = await CropHealth.create({
       userId,
       crop,
       disease,
       severity,
       affectedArea
-    };
-
-    const savedReport = db.cropReports.create(reportData);
+    });
 
     // Return response
     res.status(201).json({
@@ -43,6 +30,13 @@ const submitReport = async (req, res, next) => {
       data: savedReport
     });
   } catch (error) {
+    if (error.name === 'ValidationError') {
+      return res.status(400).json({
+        success: false,
+        message: 'Validation failed',
+        errors: Object.values(error.errors).map(e => e.message)
+      });
+    }
     next(error);
   }
 };
@@ -55,11 +49,8 @@ const getReports = async (req, res, next) => {
   try {
     const userId = req.userId;
 
-    // Get all reports for this user
-    const userReports = db.cropReports.findByUserId(userId);
-
-    // Sort by creation date (newest first)
-    userReports.sort((a, b) => new Date(b.createdAt) - new Date(a.createdAt));
+    // Get all reports for this user, sorted by creation date (newest first)
+    const userReports = await CropHealth.find({ userId }).sort({ createdAt: -1 });
 
     res.status(200).json({
       success: true,
@@ -81,7 +72,7 @@ const getReportById = async (req, res, next) => {
     const userId = req.userId;
 
     // Find the report
-    const report = db.cropReports.findById(id);
+    const report = await CropHealth.findById(id);
 
     if (!report) {
       return res.status(404).json({
@@ -91,7 +82,7 @@ const getReportById = async (req, res, next) => {
     }
 
     // Check if user owns this report
-    if (report.userId !== userId) {
+    if (report.userId.toString() !== userId) {
       return res.status(403).json({
         success: false,
         message: 'Access denied'

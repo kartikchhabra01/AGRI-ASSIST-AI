@@ -1,9 +1,26 @@
 const express = require('express');
 const cors = require('cors');
 const dotenv = require('dotenv');
+const path = require('path');
+const connectDB = require('./config/db');
 
-// Load environment variables
-dotenv.config();
+// Load environment variables from multiple possible locations
+const envPaths = [
+  path.join(__dirname, '.env'),
+  path.join(__dirname, '.env.local'),
+  path.join(process.cwd(), '.env')
+];
+
+for (const envPath of envPaths) {
+  if (require('fs').existsSync(envPath)) {
+    dotenv.config({ path: envPath });
+    console.log(`Loaded .env from: ${envPath}`);
+    break;
+  }
+}
+
+// Connect to MongoDB
+connectDB();
 
 // Import routes
 const authRoutes = require('./routes/authRoutes');

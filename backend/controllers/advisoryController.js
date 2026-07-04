@@ -3,7 +3,6 @@
  * Handles AI crop advisory queries and history
  */
 
-const db = require('../config/db');
 const Query = require('../models/Query');
 const { getDiagnosis } = require('../services/aiService');
 
@@ -16,29 +15,17 @@ const submitQuery = async (req, res, next) => {
     const { crop, issue } = req.body;
     const userId = req.userId;
 
-    // Validate input
-    const validation = Query.validate({ userId, crop, issue });
-    if (!validation.isValid) {
-      return res.status(400).json({
-        success: false,
-        message: 'Validation failed',
-        errors: validation.errors
-      });
-    }
-
     // Get AI diagnosis
     const aiResponse = await getDiagnosis(crop, issue);
 
     // Save query to database
-    const queryData = {
+    const savedQuery = await Query.create({
       userId,
       crop,
       issue,
       diagnosis: aiResponse.diagnosis,
       recommendation: aiResponse.recommendation
-    };
-
-    const savedQuery = db.queries.create(queryData);
+    });
 
     // Return response
     res.status(201).json({
@@ -47,6 +34,13 @@ const submitQuery = async (req, res, next) => {
       data: savedQuery
     });
   } catch (error) {
+    if (error.name === 'ValidationError') {
+      return res.status(400).json({
+        success: false,
+        message: 'Validation failed',
+        errors: Object.values(error.errors).map(e => e.message)
+      });
+    }
     next(error);
   }
 };
@@ -59,11 +53,8 @@ const getHistory = async (req, res, next) => {
   try {
     const userId = req.userId;
 
-    // Get all queries for this user
-    const userQueries = db.queries.findByUserId(userId);
-
-    // Sort by creation date (newest first)
-    userQueries.sort((a, b) => new Date(b.createdAt) - new Date(a.createdAt));
+    // Get all queries for this user, sorted by creation date (newest first)
+    const userQueries = await Query.find({ userId }).sort({ createdAt: -1 });
 
     res.status(200).json({
       success: true,
@@ -85,7 +76,7 @@ const getQueryById = async (req, res, next) => {
     const userId = req.userId;
 
     // Find the query
-    const query = db.queries.findById(id);
+    const query = await Query.findById(id);
 
     if (!query) {
       return res.status(404).json({
@@ -95,7 +86,7 @@ const getQueryById = async (req, res, next) => {
     }
 
     // Check if user owns this query
-    if (query.userId !== userId) {
+    if (query.userId.toString() !== userId) {
       return res.status(403).json({
         success: false,
         message: 'Access denied'
@@ -127,11 +118,15 @@ const searchQueries = async (req, res, next) => {
       });
     }
 
-    // Search all queries
-    const allResults = db.queries.search(q);
-
-    // Filter to only show user's queries
-    const userResults = allResults.filter(query => query.userId === userId);
+    // Search queries for this user
+    const userResults = await Query.find({
+      userId,
+      $or: [
+        { crop: { $regex: q, $options: 'i' } },
+        { issue: { $regex: q, $options: 'i' } },
+        { diagnosis: { $regex: q, $options: 'i' } }
+      ]
+    }).sort({ createdAt: -1 });
 
     res.status(200).json({
       success: true,
@@ -154,7 +149,7 @@ const updateQuery = async (req, res, next) => {
     const userId = req.userId;
 
     // Find the query
-    const query = db.queries.findById(id);
+    const query = await Query.findById(id);
 
     if (!query) {
       return res.status(404).json({
@@ -164,27 +159,11 @@ const updateQuery = async (req, res, next) => {
     }
 
     // Check if user owns this query
-    if (query.userId !== userId) {
+    if (query.userId.toString() !== userId) {
       return res.status(403).json({
         success: false,
         message: 'Access denied'
       });
-    }
-
-    // Validate input if provided
-    if (crop || issue) {
-      const validation = Query.validate({ 
-        userId, 
-        crop: crop || query.crop, 
-        issue: issue || query.issue 
-      });
-      if (!validation.isValid) {
-        return res.status(400).json({
-          success: false,
-          message: 'Validation failed',
-          errors: validation.errors
-        });
-      }
     }
 
     // Update query
@@ -199,7 +178,11 @@ const updateQuery = async (req, res, next) => {
       updates.recommendation = aiResponse.recommendation;
     }
 
-    const updatedQuery = db.queries.update(id, updates);
+    const updatedQuery = await Query.findByIdAndUpdate(
+      id,
+      updates,
+      { new: true, runValidators: true }
+    );
 
     res.status(200).json({
       success: true,
@@ -221,7 +204,7 @@ const deleteQuery = async (req, res, next) => {
     const userId = req.userId;
 
     // Find the query
-    const query = db.queries.findById(id);
+    const query = await Query.findById(id);
 
     if (!query) {
       return res.status(404).json({
@@ -231,7 +214,7 @@ const deleteQuery = async (req, res, next) => {
     }
 
     // Check if user owns this query
-    if (query.userId !== userId) {
+    if (query.userId.toString() !== userId) {
       return res.status(403).json({
         success: false,
         message: 'Access denied'
@@ -239,7 +222,7 @@ const deleteQuery = async (req, res, next) => {
     }
 
     // Delete query
-    db.queries.delete(id);
+    await Query.findByIdAndDelete(id);
 
     res.status(200).json({
       success: true,
@@ -258,17 +241,12 @@ const deleteAllQueries = async (req, res, next) => {
   try {
     const userId = req.userId;
 
-    // Get all user queries
-    const userQueries = db.queries.findByUserId(userId);
-
-    // Delete all queries
-    userQueries.forEach(query => {
-      db.queries.delete(query.id);
-    });
+    // Delete all user queries
+    const result = await Query.deleteMany({ userId });
 
     res.status(200).json({
       success: true,
-      message: `Deleted ${userQueries.length} queries successfully`
+      message: `Deleted ${result.deletedCount} queries successfully`
     });
   } catch (error) {
     next(error);
