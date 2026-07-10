@@ -7,18 +7,21 @@ import Register from './pages/Register'
 import AccountSettings from './pages/AccountSettings'
 import ComponentShowcase from './pages/ComponentShowcase'
 import AIChat from './pages/AIChat'
+import AuthCallback from './pages/AuthCallback'
+import ProtectedRoute from './components/ProtectedRoute'
 
 function App() {
   return (
     <Routes>
       <Route path="/" element={<Home />} />
       <Route path="/about" element={<About />} />
-      <Route path="/dashboard" element={<Dashboard />} />
+      <Route path="/dashboard" element={<ProtectedRoute><Dashboard /></ProtectedRoute>} />
       <Route path="/login" element={<Login />} />
       <Route path="/register" element={<Register />} />
-      <Route path="/settings" element={<AccountSettings />} />
+      <Route path="/settings" element={<ProtectedRoute><AccountSettings /></ProtectedRoute>} />
       <Route path="/components" element={<ComponentShowcase />} />
-      <Route path="/chat" element={<AIChat />} />
+      <Route path="/chat" element={<ProtectedRoute><AIChat /></ProtectedRoute>} />
+      <Route path="/auth/callback" element={<AuthCallback />} />
     </Routes>
   )
 }

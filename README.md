@@ -40,6 +40,8 @@ AGRI ASSIST AI is a full-stack web application designed to provide instant agric
 ### Authentication
 - JWT - Token-based authentication
 - bcryptjs - Password hashing
+- Passport.js - Authentication middleware
+- Google OAuth 2.0 - Social login integration
 
 ### AI Integration
 - Google Gemini API - AI advisory generation
@@ -63,7 +65,8 @@ AGRI-ASSIST-AI/
 │   │   │   │   ├── ConfirmModal.jsx
 │   │   │   │   └── index.js
 │   │   │   ├── Logo.jsx
-│   │   │   └── Navbar.jsx
+│   │   │   ├── Navbar.jsx
+│   │   │   └── ProtectedRoute.jsx
 │   │   ├── context/            # React context providers
 │   │   │   └── ThemeContext.jsx
 │   │   ├── pages/              # Page components
@@ -74,7 +77,8 @@ AGRI-ASSIST-AI/
 │   │   │   ├── Register.jsx
 │   │   │   ├── AIChat.jsx
 │   │   │   ├── ComponentShowcase.jsx
-│   │   │   └── AccountSettings.jsx
+│   │   │   ├── AccountSettings.jsx
+│   │   │   └── AuthCallback.jsx
 │   │   ├── services/           # API services
 │   │   │   └── api.js
 │   │   ├── App.jsx             # Main app component
@@ -85,7 +89,8 @@ AGRI-ASSIST-AI/
 │   └── vite.config.js
 ├── backend/                     # Express.js API server
 │   ├── config/                 # Configuration files
-│   │   └── db.js               # MongoDB connection
+│   │   ├── db.js               # MongoDB connection
+│   │   └── passport.js         # Passport OAuth configuration
 │   ├── controllers/            # Route controllers
 │   │   ├── authController.js
 │   │   ├── advisoryController.js
@@ -93,7 +98,9 @@ AGRI-ASSIST-AI/
 │   │   └── dashboardController.js
 │   ├── middleware/             # Express middleware
 │   │   ├── authMiddleware.js
-│   │   └── errorHandler.js
+│   │   ├── errorHandler.js
+│   │   ├── validator.js        # Input validation
+│   │   └── rateLimiter.js      # Rate limiting
 │   ├── models/                 # Mongoose models
 │   │   ├── User.js
 │   │   ├── Query.js
@@ -183,12 +190,17 @@ The frontend will run on `http://localhost:5173`
 | GEMINI_API_KEY | Google Gemini API key for AI advisory | Yes |
 | CORS_ORIGIN | Frontend URL for CORS configuration | Yes |
 | MONGO_URI | MongoDB Atlas connection string | Yes |
+| GOOGLE_CLIENT_ID | Google OAuth client ID | Optional |
+| GOOGLE_CLIENT_SECRET | Google OAuth client secret | Optional |
+| GOOGLE_CALLBACK_URL | Google OAuth callback URL | Optional |
 
 ## API Routes
 
 ### Authentication Routes (`/api/auth`)
-- `POST /api/auth/register` - Register a new user
-- `POST /api/auth/login` - Login user
+- `POST /api/auth/register` - Register a new user (rate limited)
+- `POST /api/auth/login` - Login user (rate limited)
+- `GET /api/auth/google` - Initiate Google OAuth login
+- `GET /api/auth/google/callback` - Google OAuth callback
 - `GET /api/auth/me` - Get current user profile (protected)
 - `PUT /api/auth/profile` - Update user profile (protected)
 - `PUT /api/auth/password` - Change password (protected)
@@ -309,6 +321,16 @@ The frontend will run on `http://localhost:5173`
 - Implemented proper database relationships
 - Created architecture documentation
 - Prepared Gemini API integration
+
+### Week 6: Security & Authentication Enhancements
+- **Protected Routes**: Implemented ProtectedRoute component for frontend route protection
+- **Input Validation**: Added express-validator for all API endpoints with proper error messages
+- **Rate Limiting**: Implemented rate limiting on auth endpoints (5 requests per 15 minutes)
+- **CORS Security**: Updated CORS to use environment-based origin instead of wildcard
+- **Google OAuth**: Implemented Google OAuth 2.0 authentication with Passport.js
+- **JWT Expiration**: Added automatic logout on token expiration with redirect to login
+- **Navigation Preservation**: Users are redirected to intended page after login
+- **Security Headers**: Improved security with proper error handling and validation
 
 ## Architecture
 

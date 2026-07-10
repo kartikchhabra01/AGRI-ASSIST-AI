@@ -36,6 +36,22 @@ const request = async (endpoint, options = {}) => {
     const response = await fetch(url, config);
     const data = await response.json();
 
+    // Handle JWT expiration (401 Unauthorized)
+    if (response.status === 401) {
+      // Clear auth data
+      localStorage.removeItem('token');
+      localStorage.removeItem('user');
+      
+      // Redirect to login if not already there
+      if (window.location.pathname !== '/login' && window.location.pathname !== '/register') {
+        // Store current path for redirect after login
+        sessionStorage.setItem('redirectAfterLogin', window.location.pathname);
+        window.location.href = '/login';
+      }
+      
+      throw new Error('Session expired. Please login again.');
+    }
+
     if (!response.ok) {
       throw new Error(data.message || 'API request failed');
     }

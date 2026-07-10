@@ -274,11 +274,32 @@ const deleteAccount = async (req, res, next) => {
   }
 };
 
+/**
+ * Google OAuth callback
+ * GET /api/auth/google/callback
+ */
+const googleCallback = async (req, res, next) => {
+  try {
+    // User is attached by passport
+    const user = req.user;
+
+    // Generate JWT token
+    const token = generateToken(user._id);
+
+    // Redirect to frontend with token
+    const frontendUrl = process.env.CORS_ORIGIN || 'http://localhost:5173';
+    res.redirect(`${frontendUrl}/auth/callback?token=${token}`);
+  } catch (error) {
+    next(error);
+  }
+};
+
 module.exports = {
   register,
   login,
   getMe,
   updateProfile,
   changePassword,
-  deleteAccount
+  deleteAccount,
+  googleCallback
 };
