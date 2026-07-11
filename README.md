@@ -61,11 +61,12 @@ AGRI-ASSIST-AI/
 │   │   │   ├── ui/             # UI component library
 │   │   │   │   ├── Button.jsx
 │   │   │   │   ├── Input.jsx
-│   │   │   │   ├── Modal.jsx
+│   │   │   │   ├── Loader.jsx
 │   │   │   │   ├── ConfirmModal.jsx
 │   │   │   │   └── index.js
 │   │   │   ├── Logo.jsx
 │   │   │   ├── Navbar.jsx
+│   │   │   ├── Footer.jsx
 │   │   │   └── ProtectedRoute.jsx
 │   │   ├── context/            # React context providers
 │   │   │   └── ThemeContext.jsx
@@ -76,7 +77,6 @@ AGRI-ASSIST-AI/
 │   │   │   ├── Login.jsx
 │   │   │   ├── Register.jsx
 │   │   │   ├── AIChat.jsx
-│   │   │   ├── ComponentShowcase.jsx
 │   │   │   ├── AccountSettings.jsx
 │   │   │   └── AuthCallback.jsx
 │   │   ├── services/           # API services
@@ -337,14 +337,57 @@ To enable Google OAuth login:
 - Prepared Gemini API integration
 
 ### Week 6: Security & Authentication Enhancements
-- **Protected Routes**: Implemented ProtectedRoute component for frontend route protection
-- **Input Validation**: Added express-validator for all API endpoints with proper error messages
-- **Rate Limiting**: Implemented rate limiting on auth endpoints (5 requests per 15 minutes)
-- **CORS Security**: Updated CORS to use environment-based origin instead of wildcard
-- **Google OAuth**: Implemented Google OAuth 2.0 authentication with Passport.js
-- **JWT Expiration**: Added automatic logout on token expiration with redirect to login
-- **Navigation Preservation**: Users are redirected to intended page after login
-- **Security Headers**: Improved security with proper error handling and validation
+- **JWT Authentication**: Implemented secure JWT-based authentication with token generation and verification
+- **Password Hashing**: Integrated bcryptjs for secure password hashing (10 salt rounds)
+- **Google OAuth Login**: Implemented Google OAuth 2.0 with Passport.js for social authentication
+  - OAuth users created with bcrypt-hashed random passwords
+  - JWT token generation on successful OAuth callback
+  - Redirect to frontend with token in URL
+  - Optional configuration (server runs without OAuth credentials)
+- **Protected Routes**: Created ProtectedRoute component for frontend route protection
+  - Protects Dashboard, AI Chat, and Account Settings pages
+  - Automatic redirect to login for unauthenticated users
+  - Navigation preservation - users redirected to intended page after login
+- **Input Validation**: Added express-validator for all API endpoints
+  - Register: name (min 2 chars), valid email, password (min 6 chars)
+  - Login: valid email, password required
+  - Profile updates: name, farmLocation, cropType validation
+  - Password change: current and new password validation
+  - Advisory queries: crop (min 2 chars), issue (min 5 chars)
+  - Crop reports: crop (min 2 chars), disease (min 2 chars), severity validation
+  - Returns HTTP 400 with detailed error messages
+- **Rate Limiting**: Implemented express-rate-limit on authentication endpoints
+  - 5 requests per 15 minutes per IP address
+  - Applied to POST /api/auth/register and /api/auth/login
+  - Returns HTTP 429 with friendly error message
+- **CORS Security**: Updated CORS configuration to use environment-based origin
+  - Uses CORS_ORIGIN environment variable
+  - Credentials enabled for cookie support
+  - No wildcard usage for enhanced security
+- **JWT Expiration Handling**: Automatic logout on token expiration
+  - 401 response detection in API client
+  - Automatic token and user data cleanup
+  - Redirect to login with navigation preservation
+- **User Profile Management**: Complete CRUD operations
+  - Get current user profile (GET /api/auth/me)
+  - Update profile (PUT /api/auth/profile)
+  - Change password with verification (PUT /api/auth/password)
+  - Delete account with confirmation (DELETE /api/auth/account)
+- **Crop Report APIs**: Full crop health tracking
+  - Create report (POST /api/crop/report)
+  - Get all reports (GET /api/crop/reports)
+  - Get report by ID (GET /api/crop/reports/:id)
+- **Dashboard Statistics API**: Analytics endpoints
+  - Overall statistics (GET /api/dashboard/stats)
+  - User-specific statistics (GET /api/dashboard/user-stats)
+- **Postman API Testing**: Complete Postman collection
+  - All endpoints documented and tested
+  - Auto-save token script for authentication
+  - Environment variables for easy configuration
+- **MongoDB Atlas Integration**: Cloud database connection
+  - Mongoose models for User, Query, and CropHealth
+  - Proper relationships and indexing
+  - Data persistence across sessions
 
 ## Architecture
 
