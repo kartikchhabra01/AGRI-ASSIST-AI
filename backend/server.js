@@ -19,6 +19,10 @@ for (const envPath of envPaths) {
   }
 }
 
+// Passport reads its OAuth configuration during module initialization, so it
+// must be loaded only after environment variables have been populated.
+const passport = require('./config/passport');
+
 // Connect to MongoDB
 connectDB();
 
@@ -38,6 +42,9 @@ app.use(cors({
   origin: process.env.CORS_ORIGIN || 'http://localhost:5173',
   credentials: true
 }));
+
+// OAuth returns a JWT, so Passport sessions are not needed.
+app.use(passport.initialize());
 
 // API Routes
 app.use('/api/auth', authRoutes);

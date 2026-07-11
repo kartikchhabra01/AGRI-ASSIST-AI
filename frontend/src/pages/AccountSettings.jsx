@@ -10,7 +10,6 @@ import toast from 'react-hot-toast'
 
 function AccountSettings() {
   const navigate = useNavigate()
-  const [user, setUser] = useState(null)
   const [loading, setLoading] = useState(true)
   
   // Profile update state
@@ -28,12 +27,10 @@ function AccountSettings() {
   
   // Delete account state
   const [showDeleteModal, setShowDeleteModal] = useState(false)
-  const [deletingAccount, setDeletingAccount] = useState(false)
   
   // Advisory history state
   const [advisoryHistory, setAdvisoryHistory] = useState([])
   const [showDeleteAllModal, setShowDeleteAllModal] = useState(false)
-  const [deletingAll, setDeletingAll] = useState(false)
 
   useEffect(() => {
     if (!authAPI.isAuthenticated()) {
@@ -49,20 +46,18 @@ function AccountSettings() {
     try {
       const userData = authAPI.getUser()
       if (userData) {
-        setUser(userData)
         setName(userData.name || '')
         setFarmLocation(userData.farmLocation || '')
         setCropType(userData.cropType || '')
       } else {
         const response = await authAPI.getCurrentUser()
         if (response.success) {
-          setUser(response.data.user)
           setName(response.data.user.name || '')
           setFarmLocation(response.data.user.farmLocation || '')
           setCropType(response.data.user.cropType || '')
         }
       }
-    } catch (error) {
+    } catch {
       toast.error('Failed to load user data')
     } finally {
       setLoading(false)
@@ -89,7 +84,6 @@ function AccountSettings() {
       
       if (response.success) {
         toast.success('Profile updated successfully')
-        setUser(response.data.user)
       }
     } catch (error) {
       toast.error(error.message || 'Failed to update profile')
@@ -118,8 +112,6 @@ function AccountSettings() {
   }
 
   const handleDeleteAccount = async () => {
-    setDeletingAccount(true)
-
     try {
       const response = await authAPI.deleteAccount()
       
@@ -130,7 +122,6 @@ function AccountSettings() {
     } catch (error) {
       toast.error(error.message || 'Failed to delete account')
     } finally {
-      setDeletingAccount(false)
       setShowDeleteModal(false)
     }
   }
@@ -149,8 +140,6 @@ function AccountSettings() {
   }
 
   const handleDeleteAllQueries = async () => {
-    setDeletingAll(true)
-
     try {
       const response = await advisoryAPI.deleteAllQueries()
       
@@ -161,7 +150,6 @@ function AccountSettings() {
     } catch (error) {
       toast.error(error.message || 'Failed to delete queries')
     } finally {
-      setDeletingAll(false)
       setShowDeleteAllModal(false)
     }
   }

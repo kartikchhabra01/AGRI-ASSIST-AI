@@ -5,13 +5,19 @@
 
 const passport = require('passport');
 const GoogleStrategy = require('passport-google-oauth20').Strategy;
+const bcrypt = require('bcryptjs');
+const crypto = require('crypto');
 const User = require('../models/User');
 
 /**
  * Google OAuth Strategy Configuration
  * Only configured if environment variables are set
  */
-if (process.env.GOOGLE_CLIENT_ID && process.env.GOOGLE_CLIENT_SECRET) {
+const isGoogleAuthConfigured = Boolean(
+  process.env.GOOGLE_CLIENT_ID && process.env.GOOGLE_CLIENT_SECRET
+);
+
+if (isGoogleAuthConfigured) {
   passport.use(
     new GoogleStrategy(
       {
@@ -21,8 +27,13 @@ if (process.env.GOOGLE_CLIENT_ID && process.env.GOOGLE_CLIENT_SECRET) {
       },
       async (accessToken, refreshToken, profile, done) => {
         try {
+          const email = profile.emails?.[0]?.value;
+          if (!email) {
+            return done(new Error('Google did not provide an email address'));
+          }
+
           // Check if user already exists
-          let user = await User.findOne({ email: profile.emails[0].value });
+          let user = await User.findOne({ email });
 
           if (user) {
             // User exists, return user
@@ -31,8 +42,10 @@ if (process.env.GOOGLE_CLIENT_ID && process.env.GOOGLE_CLIENT_SECRET) {
             // Create new user
             user = await User.create({
               name: profile.displayName,
-              email: profile.emails[0].value,
-              password: 'oauth_user_' + Date.now(), // Random password for OAuth users
+              email,
+              // OAuth users do not know this password; hashing prevents a
+              // plaintext credential from being stored in the database.
+              password: await bcrypt.hash(crypto.randomBytes(32).toString('hex'), 10),
               location: null,
               farmLocation: null,
               cropType: null,
@@ -69,3 +82,4 @@ passport.deserializeUser(async (id, done) => {
 });
 
 module.exports = passport;
+module.exports.isGoogleAuthConfigured = isGoogleAuthConfigured;

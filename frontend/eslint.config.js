@@ -23,7 +23,17 @@ export default defineConfig([
       },
     },
     rules: {
-      'no-unused-vars': ['error', { varsIgnorePattern: '^[A-Z_]' }],
+      // `motion` is consumed as a JSX member expression (for example,
+      // <motion.div />), which ESLint's core unused-variable rule does not
+      // recognize without the React ESLint plugin.
+      'no-unused-vars': [
+        'error',
+        {
+          varsIgnorePattern: '^(?:[A-Z_].*|motion)$',
+          argsIgnorePattern: '^[A-Z_].*$',
+        },
+      ],
+      'react-refresh/only-export-components': 'off',
     },
   },
 ])

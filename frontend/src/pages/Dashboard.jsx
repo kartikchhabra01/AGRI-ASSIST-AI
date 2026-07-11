@@ -52,7 +52,6 @@ function Dashboard() {
     { label: 'Health Score', value: '0%', icon: Activity, change: '+0%' },
     { label: 'Yield Forecast', value: '0t', icon: TrendingUp, change: '+0%' },
   ])
-  const [userStats, setUserStats] = useState(null)
 
   useEffect(() => {
     const fetchDashboardData = async () => {
@@ -62,10 +61,7 @@ function Dashboard() {
       }
 
       try {
-        const [statsResponse, userStatsResponse] = await Promise.all([
-          dashboardAPI.getStats(),
-          dashboardAPI.getUserStats()
-        ])
+        const statsResponse = await dashboardAPI.getStats()
 
         if (statsResponse.success) {
           const data = statsResponse.data
@@ -77,9 +73,6 @@ function Dashboard() {
           ])
         }
 
-        if (userStatsResponse.success) {
-          setUserStats(userStatsResponse.data)
-        }
       } catch (error) {
         console.error('Failed to fetch dashboard data:', error)
         toast.error('Failed to load dashboard data')

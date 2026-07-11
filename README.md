@@ -186,13 +186,27 @@ The frontend will run on `http://localhost:5173`
 | Variable | Description | Required |
 |----------|-------------|----------|
 | PORT | Backend server port | Yes |
+| MONGO_URI | MongoDB connection string | Yes |
 | JWT_SECRET | Secret key for JWT token generation | Yes |
 | GEMINI_API_KEY | Google Gemini API key for AI advisory | Yes |
 | CORS_ORIGIN | Frontend URL for CORS configuration | Yes |
-| MONGO_URI | MongoDB Atlas connection string | Yes |
 | GOOGLE_CLIENT_ID | Google OAuth client ID | Optional |
 | GOOGLE_CLIENT_SECRET | Google OAuth client secret | Optional |
 | GOOGLE_CALLBACK_URL | Google OAuth callback URL | Optional |
+
+### Google OAuth Setup (Optional)
+
+To enable Google OAuth login:
+
+1. Go to [Google Cloud Console](https://console.cloud.google.com/)
+2. Create a new project or select existing one
+3. Navigate to APIs & Services → Credentials
+4. Create OAuth 2.0 credentials → Web application
+5. Add authorized redirect URI: `http://localhost:5000/api/auth/google/callback`
+6. Copy Client ID and Client Secret to your `.env` file
+7. Set `GOOGLE_CALLBACK_URL=http://localhost:5000/api/auth/google/callback`
+
+**Note:** Google OAuth is optional. The application works with email/password authentication without it.
 
 ## API Routes
 

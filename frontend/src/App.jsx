@@ -5,7 +5,6 @@ import Dashboard from './pages/Dashboard'
 import Login from './pages/Login'
 import Register from './pages/Register'
 import AccountSettings from './pages/AccountSettings'
-import ComponentShowcase from './pages/ComponentShowcase'
 import AIChat from './pages/AIChat'
 import AuthCallback from './pages/AuthCallback'
 import ProtectedRoute from './components/ProtectedRoute'
@@ -19,7 +18,6 @@ function App() {
       <Route path="/login" element={<Login />} />
       <Route path="/register" element={<Register />} />
       <Route path="/settings" element={<ProtectedRoute><AccountSettings /></ProtectedRoute>} />
-      <Route path="/components" element={<ComponentShowcase />} />
       <Route path="/chat" element={<ProtectedRoute><AIChat /></ProtectedRoute>} />
       <Route path="/auth/callback" element={<AuthCallback />} />
     </Routes>

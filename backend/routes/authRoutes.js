@@ -12,7 +12,16 @@ const { authLimiter } = require('../middleware/rateLimiter');
 const passport = require('../config/passport');
 
 // Google OAuth routes
-router.get('/google', passport.authenticate('google', { scope: ['profile', 'email'] }));
+router.get('/google', (req, res, next) => {
+  if (!passport.isGoogleAuthConfigured) {
+    return res.status(503).json({
+      success: false,
+      message: 'Google login is not configured on this server.'
+    });
+  }
+
+  return passport.authenticate('google', { scope: ['profile', 'email'] })(req, res, next);
+});
 router.get('/google/callback', passport.authenticate('google', { session: false }), authController.googleCallback);
 
 // Public routes with validation and rate limiting

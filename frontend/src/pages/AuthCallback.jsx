@@ -29,7 +29,7 @@ function AuthCallback() {
           toast.error('Authentication failed')
           navigate('/login')
         }
-      } catch (error) {
+      } catch {
         toast.error('Authentication failed')
         navigate('/login')
       }
@@ -45,7 +45,7 @@ function AuthCallback() {
         } else {
           navigate('/login')
         }
-      } catch (error) {
+      } catch {
         toast.error('Failed to fetch user data')
         navigate('/login')
       }
