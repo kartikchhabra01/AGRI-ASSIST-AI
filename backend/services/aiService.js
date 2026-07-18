@@ -1,154 +1,224 @@
 /**
  * AI Service
- * Integrates with Gemini API for crop advisory
- * Currently uses placeholder logic for Week 4
+ * Integrates with Gemini API using @google/generative-ai SDK
+ * Supports text, images, multi-language, and conversation context
  */
 
-const axios = require('axios');
+const { GoogleGenerativeAI } = require('@google/generative-ai');
 
-// Placeholder AI response logic for Week 4
-// In Week 5, this will be replaced with actual Gemini API integration
-const getPlaceholderDiagnosis = (crop, issue) => {
-  const cropIssueMap = {
-    'rice': {
-      'brown spots': {
-        diagnosis: 'Possible fungal leaf blight (Bacterial Leaf Blight)',
-        recommendation: 'Apply copper fungicide, improve drainage, avoid overhead irrigation, use resistant varieties'
-      },
-      'yellowing': {
-        diagnosis: 'Possible nitrogen deficiency or iron deficiency',
-        recommendation: 'Apply nitrogen fertilizer, check soil pH, consider iron sulfate application'
-      },
-      'stunted growth': {
-        diagnosis: 'Possible nutrient deficiency or water stress',
-        recommendation: 'Test soil nutrients, ensure proper irrigation, apply balanced NPK fertilizer'
-      }
-    },
-    'wheat': {
-      'rust': {
-        diagnosis: 'Wheat rust (Puccinia triticina)',
-        recommendation: 'Apply fungicides containing triazoles, remove infected plants, use resistant varieties'
-      },
-      'yellow spots': {
-        diagnosis: 'Possible stripe rust or leaf rust',
-        recommendation: 'Apply fungicide early, monitor spread, consider crop rotation'
-      },
-      'lodging': {
-        diagnosis: 'Weak stems due to excess nitrogen or disease',
-        recommendation: 'Reduce nitrogen application, use plant growth regulators, choose lodging-resistant varieties'
-      }
-    },
-    'corn': {
-      'leaf blight': {
-        diagnosis: 'Northern Corn Leaf Blight',
-        recommendation: 'Apply fungicide, rotate crops, use resistant hybrids, ensure proper plant spacing'
-      },
-      'stunted': {
-        diagnosis: 'Possible nutrient deficiency or pest damage',
-        recommendation: 'Test soil, apply appropriate fertilizer, check for rootworm damage'
-      },
-      'yellow leaves': {
-        diagnosis: 'Possible nitrogen deficiency',
-        recommendation: 'Apply nitrogen fertilizer, ensure proper irrigation timing'
-      }
-    },
-    'cotton': {
-      'boll rot': {
-        diagnosis: 'Fungal boll rot',
-        recommendation: 'Apply fungicide, improve air circulation, avoid late-season irrigation'
-      },
-      'leaf curl': {
-        diagnosis: 'Cotton leaf curl virus',
-        recommendation: 'Remove infected plants, control whitefly vectors, use resistant varieties'
-      },
-      'wilting': {
-        diagnosis: 'Possible Fusarium wilt or water stress',
-        recommendation: 'Test for Fusarium, improve drainage, ensure consistent irrigation'
-      }
-    }
-  };
+const GEMINI_MODEL = process.env.GEMINI_MODEL || 'gemini-3.5-flash';
 
-  const cropLower = crop.toLowerCase();
-  const issueLower = issue.toLowerCase();
+let genAI = null;
 
-  // Check for exact matches
-  if (cropIssueMap[cropLower]) {
-    for (const [key, value] of Object.entries(cropIssueMap[cropLower])) {
-      if (issueLower.includes(key)) {
-        return value;
-      }
-    }
+if (process.env.GEMINI_API_KEY) {
+  genAI = new GoogleGenerativeAI(process.env.GEMINI_API_KEY);
+} else {
+  console.warn('WARNING: GEMINI_API_KEY is not set. AI features will be unavailable.');
+}
+
+const getGenAI = () => {
+  if (!genAI) {
+    throw new Error('GEMINI_API_KEY is not configured. AI features are unavailable.');
   }
+  return genAI;
+};
 
-  // Default response if no match found
-  return {
-    diagnosis: `Potential issue detected in ${crop}. Further analysis recommended.`,
-    recommendation: 'Monitor the crop closely, consult local agricultural extension, consider soil testing, and review recent weather patterns. Apply appropriate preventive measures based on specific symptoms.'
-  };
+// Agriculture-focused system prompt
+const SYSTEM_PROMPT = `You are AGRI ASSIST AI, an expert agricultural assistant specializing in helping farmers with crop management, disease diagnosis, fertilization, irrigation, pest control, soil health, weather impact, organic farming, and general crop management.
+
+Your expertise includes:
+- Crop disease identification and treatment
+- Fertilizer recommendations and application timing
+- Irrigation scheduling and water management
+- Pest identification and control methods
+- Soil health analysis and improvement
+- Weather impact on crops and adaptation strategies
+- Organic farming practices
+- Crop selection and rotation
+- Harvest timing and post-harvest handling
+
+Guidelines:
+1. Provide concise, practical, farmer-friendly advice
+2. Use simple language that farmers can understand
+3. Include specific actionable steps when possible
+4. Mention safety precautions when recommending chemicals
+5. Suggest organic alternatives when available
+6. If uncertain, recommend consulting local agricultural extension
+7. For image analysis, describe visible symptoms and suggest likely causes
+8. Responses should be formatted with clear headings and bullet points when appropriate
+9. If the user asks questions unrelated to agriculture, politely redirect them back to farming topics
+
+Respond in the language specified by the user (default: English).`;
+
+/**
+ * Generate AI response with conversation context
+ * @param {Array} messages - Array of message objects with role and content
+ * @param {string} language - Language code (en, hi, pa, bn, ta)
+ * @param {string} image - Optional base64 encoded image
+ * @returns {Promise<string>} AI response
+ */
+const generateResponse = async (messages, language = 'en', image = null) => {
+  try {
+    const languagePrompt = getLanguagePrompt(language);
+    const fullSystemPrompt = `${SYSTEM_PROMPT}\n\n${languagePrompt}`;
+
+    // Clean Base64 image - remove data URL prefix if present
+    let cleanImage = null;
+    if (image) {
+      cleanImage = image.replace(/^data:image\/[a-z]+;base64,/, '');
+
+      // Check image size (max 4MB for Gemini)
+      const imageSizeKB = cleanImage.length * 0.75 / 1024;
+      if (imageSizeKB > 4096) {
+        throw new Error('Image size exceeds 4MB limit. Please upload a smaller image.');
+      }
+    }
+
+    // If image is provided, use vision model with single request
+    if (cleanImage) {
+      const model = getGenAI().getGenerativeModel({
+        model: GEMINI_MODEL,
+        systemInstruction: fullSystemPrompt
+      });
+
+      const lastUserMessage = messages[messages.length - 1];
+      const prompt = lastUserMessage?.content || 'Analyze this crop image';
+
+      const result = await model.generateContent([
+        prompt,
+        {
+          inlineData: {
+            data: cleanImage,
+            mimeType: 'image/jpeg'
+          }
+        }
+      ]);
+
+      return result.response.text();
+    }
+
+    // Text-only conversation with history
+    const model = getGenAI().getGenerativeModel({
+      model: GEMINI_MODEL,
+      systemInstruction: fullSystemPrompt
+    });
+
+    // If there's no history (first message), use simple generateContent
+    if (messages.length === 1) {
+      const result = await model.generateContent(messages[0].content);
+      return result.response.text();
+    }
+
+    // Multi-turn conversation with history
+    const history = messages.slice(0, -1).map(msg => ({
+      role: msg.role === 'assistant' ? 'model' : 'user',
+      parts: [{ text: msg.content }]
+    }));
+
+    const chat = model.startChat({ history });
+
+    const lastMessage = messages[messages.length - 1];
+    const result = await chat.sendMessage(lastMessage.content);
+    return result.response.text();
+  } catch (error) {
+    console.error('Gemini API Error Details:');
+    console.error('Status:', error.status);
+    console.error('Message:', error.message);
+    if (error.response) {
+      console.error('Response:', JSON.stringify(error.response, null, 2));
+    }
+    throw new Error(`Gemini API Error (${error.status || 'Unknown'}): ${error.message}`);
+  }
 };
 
 /**
- * Get AI diagnosis for crop issue
+ * Get language-specific prompt
+ * @param {string} language - Language code
+ * @returns {string} Language prompt
+ */
+const getLanguagePrompt = (language) => {
+  const languagePrompts = {
+    en: 'Please respond in English.',
+    hi: 'कृपया हिंदी में उत्तर दें।',
+    pa: 'ਕਿਰਪਾ ਕਰਕੇ ਪੰਜਾਬੀ ਵਿੱਚ ਜਵਾਬ ਦਿਓ।',
+    bn: 'অনুগ্রহ করে বাংলায় উত্তর দিন।',
+    ta: 'தயவு செய்து தமிழில் பதிலளிக்கவும்.'
+  };
+  return languagePrompts[language] || languagePrompts.en;
+};
+
+/**
+ * Get structured diagnosis for legacy advisory queries
  * @param {string} crop - Crop name
  * @param {string} issue - Issue description
- * @returns {Promise<Object>} AI response with diagnosis and recommendation
+ * @returns {Promise<{diagnosis: string, recommendation: string}>}
  */
 const getDiagnosis = async (crop, issue) => {
-  try {
-    // For Week 4, use placeholder logic
-    // In Week 5, this will call the actual Gemini API
-    const response = getPlaceholderDiagnosis(crop, issue);
+  const prompt = `Crop: ${crop}
+Issue: ${issue}
 
-    return {
-      success: true,
-      crop,
-      issue,
-      diagnosis: response.diagnosis,
-      recommendation: response.recommendation
-    };
-  } catch (error) {
-    console.error('AI Service Error:', error);
-    throw new Error('Failed to get AI diagnosis');
-  }
+Provide a structured response with exactly these two sections:
+
+**Diagnosis:**
+Describe the likely disease, pest, or problem affecting this crop.
+
+**Recommendation:**
+Provide specific treatment steps, prevention tips, and when to consult an expert.`;
+
+  const response = await generateResponse([{ role: 'user', content: prompt }]);
+
+  const diagnosisMatch = response.match(/\*\*Diagnosis:\*\*\s*([\s\S]*?)(?=\*\*Recommendation:\*\*|$)/i);
+  const recommendationMatch = response.match(/\*\*Recommendation:\*\*\s*([\s\S]*)/i);
+
+  return {
+    diagnosis: diagnosisMatch ? diagnosisMatch[1].trim() : response.split('\n\n')[0]?.trim() || response,
+    recommendation: recommendationMatch ? recommendationMatch[1].trim() : response.split('\n\n').slice(1).join('\n\n').trim() || response
+  };
 };
 
 /**
- * Future: Integration with Gemini API
- * This will be implemented in Week 5
+ * Analyze crop image with Gemini Vision
+ * @param {string} image - Base64 encoded image
+ * @param {string} userQuery - Optional user query about the image
+ * @param {string} language - Language code
+ * @returns {Promise<string>} Image analysis result
  */
-const getGeminiDiagnosis = async (crop, issue) => {
+const analyzeImage = async (image, userQuery = '', language = 'en') => {
   try {
-    const prompt = `As an agricultural expert, diagnose the following crop issue:
-    Crop: ${crop}
-    Issue: ${issue}
-    
-    Provide:
-    1. Diagnosis
-    2. Recommendation
-    
-    Format as JSON with keys: diagnosis, recommendation`;
+    const model = getGenAI().getGenerativeModel({
+      model: GEMINI_MODEL,
+      systemInstruction: SYSTEM_PROMPT + '\n\n' + getLanguagePrompt(language)
+    });
 
-    const response = await axios.post(
-      `https://generativelanguage.googleapis.com/v1beta/models/gemini-pro:generateContent?key=${process.env.GEMINI_API_KEY}`,
+    const prompt = `Analyze this crop image and provide:\n1. Visible symptoms and observations\n2. Likely disease or condition\n3. Recommended treatment\n4. Prevention tips\n\n${userQuery ? `User question: ${userQuery}` : ''}`;
+
+    // Clean Base64 image
+    const cleanImage = image.replace(/^data:image\/[a-z]+;base64,/, '');
+
+    const result = await model.generateContent([
+      prompt,
       {
-        contents: [{
-          parts: [{
-            text: prompt
-          }]
-        }]
+        inlineData: {
+          data: cleanImage,
+          mimeType: 'image/jpeg'
+        }
       }
-    );
+    ]);
 
-    // Parse and return the response
-    // This will be implemented in Week 5
-    return response.data;
+    return result.response.text();
   } catch (error) {
-    console.error('Gemini API Error:', error);
-    throw new Error('Failed to get diagnosis from Gemini API');
+    console.error('Image Analysis Error Details:');
+    console.error('Status:', error.status);
+    console.error('Message:', error.message);
+    if (error.response) {
+      console.error('Response:', JSON.stringify(error.response, null, 2));
+    }
+    throw new Error(`Image Analysis Error (${error.status || 'Unknown'}): ${error.message}`);
   }
 };
 
 module.exports = {
+  generateResponse,
   getDiagnosis,
-  getGeminiDiagnosis
+  analyzeImage
 };

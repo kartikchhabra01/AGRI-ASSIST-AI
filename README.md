@@ -8,15 +8,20 @@ AGRI ASSIST AI is a full-stack web application designed to provide instant agric
 
 ## Features
 
-- AI-powered crop advisory chatbot with disease diagnosis
-- Secure user authentication with JWT tokens
-- Query history with AI-generated recommendations
-- Profile management (name, farm location, crop type)
-- Account settings (password change, account deletion)
-- Dashboard analytics and statistics
-- Crop health reporting and tracking
-- Responsive mobile-first design with dark/light mode
-- Full CRUD operations for all data entities
+- **Modern AI Chat Interface**: ChatGPT-like conversational experience with natural language understanding
+- **Conversation History**: Sidebar with previous conversations, create new chats, delete conversations
+- **Multi-language Support**: English, Hindi, Punjabi, Bengali, Tamil with automatic language detection
+- **Voice Input**: Browser-based speech recognition for hands-free messaging
+- **Voice Output**: Text-to-speech for listening to AI responses
+- **Image Analysis**: Upload crop images for AI-powered disease diagnosis using Gemini Vision
+- **Context-Aware Responses**: AI maintains conversation context for follow-up questions
+- **Suggested Prompts**: Quick action chips for common agricultural queries
+- **Markdown Rendering**: Formatted AI responses with code blocks and structured text
+- **Secure Authentication**: JWT tokens, Google OAuth 2.0, bcrypt password hashing
+- **User Profile Management**: Update profile, change password, delete account
+- **Dashboard Analytics**: User statistics and activity tracking
+- **Crop Health Reporting**: Track and manage crop health reports
+- **Responsive Design**: Mobile-first with dark/light mode support
 
 ## Tech Stack
 
@@ -28,6 +33,8 @@ AGRI ASSIST AI is a full-stack web application designed to provide instant agric
 - Framer Motion - Animations
 - Lucide React - Icons
 - React Hot Toast - Notifications
+- React Markdown - Markdown rendering for AI responses
+- remark-gfm - GitHub Flavored Markdown support
 
 ### Backend
 - Node.js - Runtime environment
@@ -44,7 +51,11 @@ AGRI ASSIST AI is a full-stack web application designed to provide instant agric
 - Google OAuth 2.0 - Social login integration
 
 ### AI Integration
-- Google Gemini API - AI advisory generation
+- Google Gemini API (gemini-1.5-flash) - AI advisory generation with conversation context
+- @google/generative-ai - Official Gemini SDK for Node.js
+- Gemini Vision - Image analysis for crop disease detection
+- Browser Speech Recognition API - Voice input
+- Browser Speech Synthesis API - Voice output
 
 ### Deployment
 - Vercel - Frontend hosting
@@ -93,6 +104,7 @@ AGRI-ASSIST-AI/
 │   │   └── passport.js         # Passport OAuth configuration
 │   ├── controllers/            # Route controllers
 │   │   ├── authController.js
+│   │   ├── aiController.js
 │   │   ├── advisoryController.js
 │   │   ├── cropController.js
 │   │   └── dashboardController.js
@@ -103,10 +115,12 @@ AGRI-ASSIST-AI/
 │   │   └── rateLimiter.js      # Rate limiting
 │   ├── models/                 # Mongoose models
 │   │   ├── User.js
+│   │   ├── Chat.js
 │   │   ├── Query.js
 │   │   └── CropHealth.js
 │   ├── routes/                 # API routes
 │   │   ├── authRoutes.js
+│   │   ├── aiRoutes.js
 │   │   ├── advisoryRoutes.js
 │   │   ├── cropRoutes.js
 │   │   └── dashboardRoutes.js
@@ -220,6 +234,14 @@ To enable Google OAuth login:
 - `PUT /api/auth/password` - Change password (protected)
 - `DELETE /api/auth/account` - Delete user account (protected)
 
+### AI Chat Routes (`/api/ai`)
+- `POST /api/ai/chat` - Send message to AI (protected)
+- `GET /api/ai/history` - Get all chat history (protected)
+- `GET /api/ai/history/:id` - Get specific chat by ID (protected)
+- `PUT /api/ai/history/:id` - Update chat title (protected)
+- `DELETE /api/ai/history/:id` - Delete chat (protected)
+- `POST /api/ai/new-chat` - Create new chat (protected)
+
 ### Advisory Routes (`/api/advisory`)
 - `POST /api/advisory/chat` - Submit a new advisory query (protected)
 - `GET /api/advisory/history` - Get query history (protected)
@@ -250,6 +272,24 @@ To enable Google OAuth login:
   location: String (optional),
   farmLocation: String (optional),
   cropType: String (optional),
+  createdAt: Date,
+  updatedAt: Date
+}
+```
+
+### Chat Collection
+```javascript
+{
+  _id: ObjectId,
+  userId: ObjectId (ref: User, required, indexed),
+  title: String (default: 'New Chat'),
+  messages: [{
+    role: String (enum: 'user', 'assistant'),
+    content: String,
+    image: String (base64, optional),
+    timestamp: Date
+  }],
+  language: String (enum: 'en', 'hi', 'pa', 'bn', 'ta', default: 'en'),
   createdAt: Date,
   updatedAt: Date
 }
@@ -388,6 +428,66 @@ To enable Google OAuth login:
   - Mongoose models for User, Query, and CropHealth
   - Proper relationships and indexing
   - Data persistence across sessions
+
+### Week 7: AI Integration
+- **Gemini AI Integration**: Integrated Google Gemini 1.5 Flash model for AI-powered advisory
+  - Agriculture-specific system prompt with expert farming knowledge
+  - Context-aware conversations with multi-turn dialogue support
+  - Specialized in crop diseases, fertilizers, irrigation, pest control, soil health
+  - Secure API key storage in environment variables (.env file)
+  - Error handling with detailed logging for debugging
+- **AI Chat Assistant**: Complete conversational interface inspired by ChatGPT
+  - Modern left sidebar for conversation history
+  - Main chat window with message bubbles
+  - Responsive design with mobile support
+  - Smooth animations with Framer Motion
+  - Typing indicator while AI generates response
+  - Auto-scroll to latest message
+  - Message timestamps
+  - Suggested prompt chips for quick actions
+- **Crop Image Analysis**: Gemini Vision integration for disease detection
+  - Upload JPG, JPEG, PNG images
+  - Image preview before sending
+  - AI analyzes crop images for disease detection
+  - Provides diagnosis, treatment, and prevention tips
+  - Image handling with base64 encoding
+- **Multilingual Responses**: Support for 5 Indian languages
+  - English, Hindi, Punjabi, Bengali, Tamil
+  - Language selector in sidebar
+  - AI responses generated in selected language
+  - Voice recognition adapts to selected language
+- **Secure API Key Storage**: Environment-based configuration
+  - GEMINI_API_KEY stored in .env file
+  - .env included in .gitignore to prevent accidental commits
+  - API key validation on server startup
+  - Graceful degradation when API key is missing
+- **Error Handling**: Comprehensive error management
+  - Detailed error logging for Gemini API failures
+  - User-friendly error messages via toast notifications
+  - Graceful fallback for API failures
+  - Input validation for image uploads (size limits)
+- **Loading State**: Visual feedback during AI processing
+  - Loading spinner during AI response generation
+  - Typing indicator in chat interface
+  - Disabled input while AI is processing
+  - Smooth transitions between states
+- **MongoDB Conversation History**: Persistent chat storage
+  - Chat model for conversation storage in MongoDB
+  - Create new chats with auto-titling based on first message
+  - Load previous conversations from database
+  - Delete conversations with ownership verification
+  - Most recent chats displayed first
+  - Message history with role, content, image, and timestamp
+- **Backend Architecture**: New AI-specific infrastructure
+  - AI service with @google/generative-ai SDK
+  - Dedicated AI controller and routes
+  - JWT-protected endpoints for chat operations
+  - Image handling with base64 encoding
+- **Markdown Rendering**: Formatted AI responses
+  - react-markdown with remark-gfm
+  - GitHub Flavored Markdown support
+  - Tables, lists, code blocks
+  - Proper styling with Tailwind CSS
 
 ## Architecture
 
