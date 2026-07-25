@@ -4,6 +4,7 @@
  */
 
 const User = require('../models/User');
+const mongoose = require('mongoose');
 const Query = require('../models/Query');
 const CropHealth = require('../models/CropHealth');
 const Chat = require('../models/Chat');
@@ -98,10 +99,27 @@ const getUserStats = async (req, res, next) => {
   try {
     const userId = req.userId;
 
-    // Get user's data
-    const totalQueries = await Query.countDocuments({ userId });
-    const totalReports = await CropHealth.countDocuments({ userId });
-    const totalChats = await Chat.countDocuments({ userId });
+    // Get user's data and derive only metrics backed by stored records.
+    const [totalQueries, totalReports, totalChats, severityBreakdown, imageAnalyses] = await Promise.all([
+      Query.countDocuments({ userId }),
+      CropHealth.countDocuments({ userId }),
+      Chat.countDocuments({ userId }),
+      CropHealth.aggregate([
+        { $match: { userId: new mongoose.Types.ObjectId(userId) } },
+        { $group: { _id: '$severity', count: { $sum: 1 } } }
+      ]),
+      Chat.aggregate([
+        { $match: { userId: new mongoose.Types.ObjectId(userId) } },
+        { $unwind: '$messages' },
+        { $match: { 'messages.image': { $ne: null } } },
+        { $count: 'count' }
+      ])
+    ]);
+
+    const reportsBySeverity = { Low: 0, Moderate: 0, High: 0 };
+    severityBreakdown.forEach(({ _id, count }) => {
+      if (_id in reportsBySeverity) reportsBySeverity[_id] = count;
+    });
 
     // Get recent queries (last 7 days)
     const sevenDaysAgo = new Date();
@@ -144,7 +162,9 @@ const getUserStats = async (req, res, next) => {
         recentQueries,
         recentChats,
         cropsQueried,
-        lastActivity
+        lastActivity,
+        reportsBySeverity,
+        imageUploads: imageAnalyses[0]?.count || 0
       }
     });
   } catch (error) {

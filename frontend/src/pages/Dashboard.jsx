@@ -35,7 +35,6 @@ import Navbar from '../components/Navbar'
 import Footer from '../components/Footer'
 import { Loader, Skeleton, CardSkeleton, StatsSkeleton, ErrorState } from '../components/ui'
 import { dashboardAPI, authAPI, aiAPI } from '../services/api'
-import toast from 'react-hot-toast'
 
 // Quick Actions Data
 const quickActions = [
@@ -76,14 +75,6 @@ const quickActions = [
   },
 ]
 
-// Suggested Prompts for AI
-const suggestedPrompts = [
-  'What crops should I plant this season?',
-  'How do I treat tomato leaf blight?',
-  'Best irrigation schedule for wheat?',
-  'Soil pH recommendations for maize?',
-]
-
 function Dashboard() {
   const navigate = useNavigate()
   const [loading, setLoading] = useState(true)
@@ -95,7 +86,6 @@ function Dashboard() {
   const [farmHealth, setFarmHealth] = useState(null)
   const [analytics, setAnalytics] = useState(null)
   const [analyticsError, setAnalyticsError] = useState(null)
-  const [upcomingTasks, setUpcomingTasks] = useState([])
 
   useEffect(() => {
     const fetchDashboardData = async () => {
@@ -109,21 +99,43 @@ function Dashboard() {
         setUser(userData)
 
         // Fetch chat history for recent activity
-        const chatResponse = await aiAPI.getChatHistory()
-        if (chatResponse.success) {
-          setChatHistory(chatResponse.data || [])
+        try {
+          const chatResponse = await aiAPI.getChatHistory()
+          if (chatResponse.success) {
+            setChatHistory(chatResponse.data || chatResponse.chats || [])
+          }
+        } catch (error) {
+          console.error('Failed to fetch chat history:', error)
+          setChatHistory([])
         }
 
         // Fetch dashboard analytics from backend
         try {
           const statsResponse = await dashboardAPI.getUserStats()
           if (statsResponse.success) {
-            setAnalytics(statsResponse.data)
-            setFarmHealth(statsResponse.data.farmHealth || null)
+            // Map backend response to frontend structure
+            const backendData = statsResponse.data
+            setAnalytics({
+              totalQueries: backendData.totalQueries || 0,
+              totalReports: backendData.totalReports || 0,
+              totalChats: backendData.totalChats || 0,
+              recentQueries: backendData.recentQueries || 0,
+              recentChats: backendData.recentChats || 0,
+              cropsQueried: backendData.cropsQueried || [],
+              lastActivity: backendData.lastActivity,
+              reportsBySeverity: backendData.reportsBySeverity || null,
+              imageUploads: backendData.imageUploads ?? null,
+            })
+            // Farm health not available from backend
+            setFarmHealth(null)
+          } else {
+            setAnalytics({})
+            setFarmHealth(null)
           }
         } catch (error) {
           console.error('Failed to fetch analytics:', error)
-          setAnalyticsError(error.message || 'Failed to load analytics')
+          setAnalytics({})
+          setFarmHealth(null)
         }
 
         // Fetch weather based on user's farm location
@@ -140,14 +152,14 @@ function Dashboard() {
             setWeatherError(error.message || 'Failed to load weather')
           }
         } else {
-          setWeatherError('Farm location not set')
+          setWeatherError('Set your farm location to view weather.')
         }
         setWeatherLoading(false)
 
         setLoading(false)
       } catch (error) {
         console.error('Failed to fetch dashboard data:', error)
-        toast.error('Failed to load dashboard data')
+        // Don't show error toast, just continue with partial data
         setLoading(false)
       }
     }
@@ -176,38 +188,49 @@ function Dashboard() {
   }
 
   const fetchWeather = async (location) => {
-    // Using OpenWeatherMap API
-    const API_KEY = import.meta.env.VITE_WEATHER_API_KEY
-    if (!API_KEY) {
-      console.warn('Weather API key not configured')
-      return null
+    const geocodeResponse = await fetch(
+      `https://geocoding-api.open-meteo.com/v1/search?name=${encodeURIComponent(location)}&count=1&language=en&format=json`
+    )
+    if (!geocodeResponse.ok) throw new Error('Unable to find the farm location')
+    const geocodeData = await geocodeResponse.json()
+    const place = geocodeData.results?.[0]
+    if (!place) throw new Error('Unable to find the farm location')
+
+    const params = new URLSearchParams({
+      latitude: place.latitude,
+      longitude: place.longitude,
+      current: 'temperature_2m,apparent_temperature,relative_humidity_2m,wind_speed_10m,weather_code',
+      daily: 'precipitation_probability_max,sunrise,sunset,uv_index_max',
+      timezone: 'auto',
+    })
+    const response = await fetch(`https://api.open-meteo.com/v1/forecast?${params}`)
+    if (!response.ok) throw new Error('Weather data is unavailable')
+    const data = await response.json()
+    const current = data.current
+    if (!current) throw new Error('Weather data is unavailable')
+
+    const weatherCodes = {
+      0: 'Clear sky', 1: 'Mainly clear', 2: 'Partly cloudy', 3: 'Overcast',
+      45: 'Foggy', 48: 'Foggy', 51: 'Light drizzle', 53: 'Drizzle', 55: 'Heavy drizzle',
+      61: 'Light rain', 63: 'Rain', 65: 'Heavy rain', 71: 'Light snow', 73: 'Snow',
+      75: 'Heavy snow', 80: 'Rain showers', 81: 'Rain showers', 82: 'Heavy showers',
+      95: 'Thunderstorm', 96: 'Thunderstorm with hail', 99: 'Thunderstorm with hail',
     }
+    const formatTime = (value) => value
+      ? new Date(value).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })
+      : '--:--'
 
-    try {
-      const response = await fetch(
-        `https://api.openweathermap.org/data/2.5/weather?q=${encodeURIComponent(location)}&units=metric&appid=${API_KEY}`
-      )
-      const data = await response.json()
-
-      if (data.cod !== 200) {
-        throw new Error(data.message || 'Weather API error')
-      }
-
-      return {
-        temperature: Math.round(data.main.temp),
-        feelsLike: Math.round(data.main.feels_like),
-        humidity: data.main.humidity,
-        windSpeed: Math.round(data.wind.speed * 3.6), // Convert m/s to km/h
-        rainChance: data.rain?.['1h'] ? Math.min(100, data.rain['1h'] * 10) : 0,
-        uvIndex: 0, // UV index requires separate API call
-        sunrise: new Date(data.sys.sunrise * 1000).toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit' }),
-        sunset: new Date(data.sys.sunset * 1000).toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit' }),
-        condition: data.weather[0].description,
-        icon: data.weather[0].icon,
-      }
-    } catch (error) {
-      console.error('Weather fetch error:', error)
-      throw error
+    return {
+      temperature: Math.round(current.temperature_2m),
+      feelsLike: Math.round(current.apparent_temperature),
+      humidity: Math.round(current.relative_humidity_2m),
+      windSpeed: Math.round(current.wind_speed_10m),
+      rainChance: data.daily?.precipitation_probability_max?.[0] ?? 0,
+      uvIndex: data.daily?.uv_index_max?.[0] ?? null,
+      sunrise: formatTime(data.daily?.sunrise?.[0]),
+      sunset: formatTime(data.daily?.sunset?.[0]),
+      condition: weatherCodes[current.weather_code] || 'Weather update',
+      weatherCode: current.weather_code,
     }
   }
 
@@ -235,8 +258,18 @@ function Dashboard() {
     try {
       const statsResponse = await dashboardAPI.getUserStats()
       if (statsResponse.success) {
-        setAnalytics(statsResponse.data)
-        setFarmHealth(statsResponse.data.farmHealth || null)
+        const data = statsResponse.data
+        setAnalytics({
+          totalQueries: data.totalQueries || 0,
+          totalReports: data.totalReports || 0,
+          totalChats: data.totalChats || 0,
+          recentQueries: data.recentQueries || 0,
+          recentChats: data.recentChats || 0,
+          cropsQueried: data.cropsQueried || [],
+          lastActivity: data.lastActivity,
+          reportsBySeverity: data.reportsBySeverity || null,
+          imageUploads: data.imageUploads ?? null,
+        })
       }
     } catch (error) {
       setAnalyticsError(error.message || 'Failed to load analytics')
@@ -378,7 +411,7 @@ function Dashboard() {
                         </p>
                       </div>
                       <div className="flex h-12 w-12 items-center justify-center rounded-xl bg-gradient-to-br from-sky-400 to-sky-600 text-white shadow-lg shadow-sky-500/30">
-                        <Sun className="h-6 w-6" />
+                        {weather?.weatherCode >= 51 ? <CloudRain className="h-6 w-6" /> : weather?.weatherCode >= 1 ? <Cloud className="h-6 w-6" /> : <Sun className="h-6 w-6" />}
                       </div>
                     </div>
                   
@@ -388,7 +421,7 @@ function Dashboard() {
                       <div>
                         <p className="text-xs text-slate-500 dark:text-slate-400">Temperature</p>
                         <p className="text-base font-semibold text-slate-900 dark:text-white">
-                          {weather?.temperature || '--'}°C
+                          {weather?.temperature ?? '--'}°C
                         </p>
                       </div>
                     </div>
@@ -397,7 +430,7 @@ function Dashboard() {
                       <div>
                         <p className="text-xs text-slate-500 dark:text-slate-400">Feels Like</p>
                         <p className="text-base font-semibold text-slate-900 dark:text-white">
-                          {weather?.feelsLike || '--'}°C
+                          {weather?.feelsLike ?? '--'}°C
                         </p>
                       </div>
                     </div>
@@ -406,7 +439,7 @@ function Dashboard() {
                       <div>
                         <p className="text-xs text-slate-500 dark:text-slate-400">Humidity</p>
                         <p className="text-base font-semibold text-slate-900 dark:text-white">
-                          {weather?.humidity || '--'}%
+                          {weather?.humidity ?? '--'}%
                         </p>
                       </div>
                     </div>
@@ -415,7 +448,7 @@ function Dashboard() {
                       <div>
                         <p className="text-xs text-slate-500 dark:text-slate-400">Wind Speed</p>
                         <p className="text-base font-semibold text-slate-900 dark:text-white">
-                          {weather?.windSpeed || '--'} km/h
+                          {weather?.windSpeed ?? '--'} km/h
                         </p>
                       </div>
                     </div>
@@ -424,7 +457,7 @@ function Dashboard() {
                       <div>
                         <p className="text-xs text-slate-500 dark:text-slate-400">Rain Chance</p>
                         <p className="text-base font-semibold text-slate-900 dark:text-white">
-                          {weather?.rainChance || '--'}%
+                          {weather?.rainChance ?? '--'}%
                         </p>
                       </div>
                     </div>
@@ -433,7 +466,7 @@ function Dashboard() {
                       <div>
                         <p className="text-xs text-slate-500 dark:text-slate-400">UV Index</p>
                         <p className="text-base font-semibold text-slate-900 dark:text-white">
-                          {weather?.uvIndex || '--'}
+                          {weather?.uvIndex ?? '--'}
                         </p>
                       </div>
                     </div>
@@ -467,9 +500,7 @@ function Dashboard() {
                   <h3 className="text-lg font-semibold text-slate-900 dark:text-white">
                     Farm Health
                   </h3>
-                  <p className="text-sm text-slate-500 dark:text-slate-400">
-                    Overall farm condition score
-                  </p>
+                  <p className="text-sm text-slate-500 dark:text-slate-400">A health score is not available yet.</p>
                   
                   <div className="mt-6 flex items-center justify-center">
                     <div className="relative h-32 w-32">
@@ -496,34 +527,18 @@ function Dashboard() {
                       </svg>
                       <div className="absolute inset-0 flex flex-col items-center justify-center">
                         <span className="text-3xl font-bold text-slate-900 dark:text-white">
-                          {farmHealth !== null ? `${farmHealth}%` : '--'}
+                          {farmHealth !== null ? `${farmHealth}%` : '—'}
                         </span>
                         <span className="text-xs font-medium text-agri-600">
-                          {farmHealth !== null ? (farmHealth >= 80 ? 'Excellent' : farmHealth >= 60 ? 'Good' : 'Needs Attention') : 'Loading'}
+                          {farmHealth !== null ? (farmHealth >= 80 ? 'Excellent' : farmHealth >= 60 ? 'Good' : 'Needs Attention') : 'No data'}
                         </span>
                       </div>
                     </div>
                   </div>
 
-                  <div className="mt-4 space-y-2">
-                    <div className="flex items-center justify-between text-sm">
-                      <span className="text-slate-600 dark:text-slate-400">Based on:</span>
-                    </div>
-                    <div className="flex flex-wrap gap-2">
-                      <span className="inline-flex items-center gap-1 rounded-full bg-agri-100 px-2 py-1 text-xs font-medium text-agri-700 dark:bg-agri-900/50 dark:text-agri-400">
-                        <CheckCircle2 className="h-3 w-3" />
-                        Weather
-                      </span>
-                      <span className="inline-flex items-center gap-1 rounded-full bg-agri-100 px-2 py-1 text-xs font-medium text-agri-700 dark:bg-agri-900/50 dark:text-agri-400">
-                        <Sparkles className="h-3 w-3" />
-                        AI Recommendations
-                      </span>
-                      <span className="inline-flex items-center gap-1 rounded-full bg-agri-100 px-2 py-1 text-xs font-medium text-agri-700 dark:bg-agri-900/50 dark:text-agri-400">
-                        <Leaf className="h-3 w-3" />
-                        Disease Reports
-                      </span>
-                    </div>
-                  </div>
+                  <p className="mt-4 text-center text-sm text-slate-500 dark:text-slate-400">
+                    Add crop reports to track report severity below.
+                  </p>
                 </motion.div>
                 )}
               </div>
@@ -616,38 +631,38 @@ function Dashboard() {
                   </p>
                   
                   <div className="mt-4 space-y-3">
-                    {analytics?.cropHealth ? (
+                    {analytics?.reportsBySeverity ? (
                       <>
                         <div className="flex items-center justify-between">
                           <div className="flex items-center gap-2">
                             <CheckCircle2 className="h-4 w-4 text-green-600" />
-                            <span className="text-sm text-slate-700 dark:text-slate-300">Healthy</span>
+                            <span className="text-sm text-slate-700 dark:text-slate-300">Low severity</span>
                           </div>
                           <span className="text-sm font-semibold text-slate-900 dark:text-white">
-                            {analytics.cropHealth.healthy || 0}
+                            {analytics.reportsBySeverity.Low || 0}
                           </span>
                         </div>
                         <div className="flex items-center justify-between">
                           <div className="flex items-center gap-2">
                             <AlertCircle className="h-4 w-4 text-amber-600" />
-                            <span className="text-sm text-slate-700 dark:text-slate-300">Warning</span>
+                            <span className="text-sm text-slate-700 dark:text-slate-300">Moderate severity</span>
                           </div>
                           <span className="text-sm font-semibold text-slate-900 dark:text-white">
-                            {analytics.cropHealth.warning || 0}
+                            {analytics.reportsBySeverity.Moderate || 0}
                           </span>
                         </div>
                         <div className="flex items-center justify-between">
                           <div className="flex items-center gap-2">
                             <Zap className="h-4 w-4 text-red-600" />
-                            <span className="text-sm text-slate-700 dark:text-slate-300">Disease Detected</span>
+                            <span className="text-sm text-slate-700 dark:text-slate-300">High severity</span>
                           </div>
                           <span className="text-sm font-semibold text-slate-900 dark:text-white">
-                            {analytics.cropHealth.diseased || 0}
+                            {analytics.reportsBySeverity.High || 0}
                           </span>
                         </div>
                       </>
                     ) : (
-                      <p className="text-sm text-slate-500 dark:text-slate-400">No crop health data available</p>
+                      <p className="text-sm text-slate-500 dark:text-slate-400">No crop report data available</p>
                     )}
                   </div>
                 </motion.div>
@@ -673,30 +688,12 @@ function Dashboard() {
                   </p>
                   
                   <div className="mt-4 grid grid-cols-2 gap-4">
-                    {analytics?.imageAnalysis ? (
+                    {analytics?.imageUploads !== null && analytics?.imageUploads !== undefined ? (
                       <>
-                        <div className="rounded-xl bg-slate-50 p-3 dark:bg-zinc-800">
+                        <div className="col-span-2 rounded-xl bg-slate-50 p-3 dark:bg-zinc-800">
                           <p className="text-xs text-slate-500 dark:text-slate-400">Uploaded</p>
                           <p className="text-lg font-semibold text-slate-900 dark:text-white">
-                            {analytics.imageAnalysis.uploaded || 0}
-                          </p>
-                        </div>
-                        <div className="rounded-xl bg-green-50 p-3 dark:bg-green-900/20">
-                          <p className="text-xs text-green-600 dark:text-green-400">Healthy</p>
-                          <p className="text-lg font-semibold text-green-700 dark:text-green-300">
-                            {analytics.imageAnalysis.healthy || 0}
-                          </p>
-                        </div>
-                        <div className="rounded-xl bg-red-50 p-3 dark:bg-red-900/20">
-                          <p className="text-xs text-red-600 dark:text-red-400">Diseased</p>
-                          <p className="text-lg font-semibold text-red-700 dark:text-red-300">
-                            {analytics.imageAnalysis.diseased || 0}
-                          </p>
-                        </div>
-                        <div className="rounded-xl bg-amber-50 p-3 dark:bg-amber-900/20">
-                          <p className="text-xs text-amber-600 dark:text-amber-400">Pending</p>
-                          <p className="text-lg font-semibold text-amber-700 dark:text-amber-300">
-                            {analytics.imageAnalysis.pending || 0}
+                            {analytics.imageUploads}
                           </p>
                         </div>
                       </>
@@ -729,24 +726,24 @@ function Dashboard() {
                   </p>
                   
                   <div className="mt-4 space-y-3">
-                    {analytics?.aiUsage ? (
+                    {analytics ? (
                       <>
                         <div className="flex items-center justify-between">
-                          <span className="text-sm text-slate-600 dark:text-slate-400">Questions Asked</span>
+                          <span className="text-sm text-slate-600 dark:text-slate-400">Advisory questions</span>
                           <span className="text-sm font-semibold text-slate-900 dark:text-white">
-                            {analytics.aiUsage.questions || 0}
+                            {analytics.totalQueries || 0}
                           </span>
                         </div>
                         <div className="flex items-center justify-between">
-                          <span className="text-sm text-slate-600 dark:text-slate-400">Images Analyzed</span>
+                          <span className="text-sm text-slate-600 dark:text-slate-400">Conversations</span>
                           <span className="text-sm font-semibold text-slate-900 dark:text-white">
-                            {analytics.aiUsage.imagesAnalyzed || 0}
+                            {analytics.totalChats || 0}
                           </span>
                         </div>
                         <div className="flex items-center justify-between">
-                          <span className="text-sm text-slate-600 dark:text-slate-400">Avg Response Time</span>
+                          <span className="text-sm text-slate-600 dark:text-slate-400">Crop reports</span>
                           <span className="text-sm font-semibold text-slate-900 dark:text-white">
-                            {analytics.aiUsage.avgResponseTime || '--'}
+                            {analytics.totalReports || 0}
                           </span>
                         </div>
                       </>
@@ -790,12 +787,12 @@ function Dashboard() {
                             {chat.title || 'New Chat'}
                           </p>
                           <p className="mt-1 text-xs text-slate-500 dark:text-slate-400">
-                            {chat.messages?.[0]?.content?.substring(0, 50) || 'No messages'}...
+                            {chat.messageCount ? `${chat.messageCount} messages` : 'No messages'}
                           </p>
                         </div>
                         <div className="flex shrink-0 items-center gap-1 text-xs text-slate-400">
                           <Clock className="h-3 w-3" />
-                          <span>{formatTime(chat.createdAt)}</span>
+                          <span>{formatTime(chat.updatedAt)}</span>
                         </div>
                       </div>
                     </button>

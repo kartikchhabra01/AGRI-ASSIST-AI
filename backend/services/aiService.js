@@ -129,8 +129,11 @@ const generateResponse = async (messages, language = 'en', image = null) => {
 
   // Clean Base64 image - remove data URL prefix if present
   let cleanImage = null;
+  let imageMimeType = 'image/jpeg';
   if (image) {
-    cleanImage = image.replace(/^data:image\/[a-z]+;base64,/, '');
+    const dataUrlMatch = image.match(/^data:(image\/[a-zA-Z0-9.+-]+);base64,/);
+    if (dataUrlMatch) imageMimeType = dataUrlMatch[1];
+    cleanImage = image.replace(/^data:image\/[a-zA-Z0-9.+-]+;base64,/, '');
 
     // Check image size (max 4MB for Gemini)
     const imageSizeKB = cleanImage.length * 0.75 / 1024;
@@ -156,7 +159,7 @@ const generateResponse = async (messages, language = 'en', image = null) => {
           {
             inlineData: {
               data: cleanImage,
-              mimeType: 'image/jpeg'
+              mimeType: imageMimeType
             }
           }
         ]);

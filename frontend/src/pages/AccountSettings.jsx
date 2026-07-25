@@ -96,6 +96,10 @@ function AccountSettings() {
       
       if (response.success) {
         toast.success('Profile updated successfully')
+        // Reload user data to reflect changes
+        await loadUserData()
+      } else {
+        toast.error(response.message || 'Failed to update profile')
       }
     } catch (error) {
       toast.error(error.message || 'Failed to update profile')
@@ -408,7 +412,7 @@ function AccountSettings() {
               <div className="space-y-3">
                 {advisoryHistory.slice(0, 5).map((query) => (
                   <div
-                    key={query.id}
+                    key={query._id}
                     className="flex items-center justify-between rounded-xl border border-slate-100 bg-white/50 p-4 dark:border-zinc-700 dark:bg-zinc-800/50"
                   >
                     <div className="min-w-0 flex-1">
@@ -422,7 +426,7 @@ function AccountSettings() {
                     <Button
                       variant="ghost"
                       size="sm"
-                      onClick={() => handleDeleteQuery(query.id)}
+                      onClick={() => handleDeleteQuery(query._id)}
                     >
                       <Trash2 className="h-4 w-4" />
                     </Button>

@@ -4,7 +4,7 @@
  */
 
 import { AlertCircle, RefreshCw } from 'lucide-react'
-import { Button } from './Button'
+import Button from './Button'
 
 export const ErrorState = ({ 
   message = 'Something went wrong', 

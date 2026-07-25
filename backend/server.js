@@ -38,7 +38,8 @@ const app = express();
 const PORT = process.env.PORT || 5000;
 
 // Middleware
-app.use(express.json());
+// Chat images are sent as base64 JSON, which exceeds Express's 100kb default.
+app.use(express.json({ limit: '6mb' }));
 app.use(cors({
   origin: process.env.CORS_ORIGIN || 'http://localhost:5173',
   credentials: true

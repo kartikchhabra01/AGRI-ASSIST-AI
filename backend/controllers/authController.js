@@ -7,6 +7,7 @@ const bcrypt = require('bcryptjs');
 const User = require('../models/User');
 const Query = require('../models/Query');
 const CropHealth = require('../models/CropHealth');
+const Chat = require('../models/Chat');
 const generateToken = require('../utils/generateToken');
 
 /**
@@ -261,6 +262,9 @@ const deleteAccount = async (req, res, next) => {
 
     // Delete user's crop reports
     await CropHealth.deleteMany({ userId });
+
+    // Delete the user's AI chat history as well.
+    await Chat.deleteMany({ userId });
 
     // Delete user
     await User.findByIdAndDelete(userId);

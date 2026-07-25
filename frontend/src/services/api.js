@@ -34,7 +34,10 @@ const request = async (endpoint, options = {}) => {
 
   try {
     const response = await fetch(url, config);
-    const data = await response.json();
+    const contentType = response.headers.get('content-type') || '';
+    const data = contentType.includes('application/json')
+      ? await response.json()
+      : {};
 
     // Handle JWT expiration (401 Unauthorized)
     if (response.status === 401) {
@@ -53,7 +56,7 @@ const request = async (endpoint, options = {}) => {
     }
 
     if (!response.ok) {
-      throw new Error(data.message || 'API request failed');
+      throw new Error(data.message || `API request failed (${response.status})`);
     }
 
     return data;

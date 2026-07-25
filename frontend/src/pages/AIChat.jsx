@@ -1,4 +1,5 @@
 import React, { useState, useRef, useEffect, useCallback, useMemo } from 'react'
+import { useSearchParams } from 'react-router-dom'
 import { motion, AnimatePresence } from 'framer-motion'
 import { 
   Bot, Send, User, Plus, Trash2, Image as ImageIcon, 
@@ -29,20 +30,6 @@ const SUGGESTED_PROMPTS = [
   { icon: Sprout, text: 'Soil Health', prompt: 'How can I improve my soil health?' },
   { icon: Sun, text: 'Weather Advice', prompt: 'How should I protect my crops from weather conditions?' }
 ]
-
-// Generate chat title from first message
-const generateChatTitle = (message) => {
-  if (!message || message.length < 3) return 'New Chat'
-  
-  const words = message.split(' ').slice(0, 5)
-  let title = words.join(' ')
-  
-  if (title.length > 40) {
-    title = title.substring(0, 37) + '...'
-  }
-  
-  return title.charAt(0).toUpperCase() + title.slice(1)
-}
 
 // Group chats by time period
 const groupChatsByTime = (chats) => {
@@ -77,6 +64,7 @@ const groupChatsByTime = (chats) => {
 }
 
 function AIChat() {
+  const [searchParams] = useSearchParams()
   const [messages, setMessages] = useState([])
   const [input, setInput] = useState('')
   const [loading, setLoading] = useState(false)
@@ -87,7 +75,7 @@ function AIChat() {
   const [imagePreview, setImagePreview] = useState(null)
   const [isRecording, setIsRecording] = useState(false)
   const [language, setLanguage] = useState('en')
-  const [isSpeaking, setIsSpeaking] = useState(false)
+  const [, setIsSpeaking] = useState(false)
   const [isWelcomeScreen, setIsWelcomeScreen] = useState(true)
   const [lastFailedMessage, setLastFailedMessage] = useState(null)
   const [lastFailedImage, setLastFailedImage] = useState(null)
@@ -119,6 +107,9 @@ function AIChat() {
         recognitionRef.current.stop()
       }
     }
+    // Speech recognition is initialized once; its language is refreshed
+    // immediately before recording starts.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [])
 
   useEffect(() => {
@@ -139,8 +130,8 @@ function AIChat() {
       if (response.success) {
         setChatHistory(response.chats)
       }
-    } catch (error) {
-      console.error('Failed to load chat history:', error)
+    } catch {
+      console.error('Failed to load chat history')
     }
   }
 
@@ -216,8 +207,14 @@ function AIChat() {
   const handleImageUpload = useCallback((e) => {
     const file = e.target.files[0]
     if (file) {
-      if (file.size > 5 * 1024 * 1024) {
-        toast.error('Image size must be less than 5MB')
+      if (!['image/jpeg', 'image/png', 'image/webp'].includes(file.type)) {
+        toast.error('Please select a JPEG, PNG, or WebP image')
+        return
+      }
+      // Base64 expands the payload. This also remains within Gemini's 4MB
+      // inline-image limit after encoding.
+      if (file.size > 3 * 1024 * 1024) {
+        toast.error('Image size must be less than 3MB')
         return
       }
       const reader = new FileReader()
@@ -266,10 +263,17 @@ function AIChat() {
           setSidebarOpen(false)
         }
       }
-    } catch (error) {
+    } catch {
       toast.error('Failed to load chat')
     }
   }, [])
+
+  useEffect(() => {
+    const requestedChatId = searchParams.get('chatId')
+    if (requestedChatId) {
+      loadChat(requestedChatId)
+    }
+  }, [loadChat, searchParams])
 
   const deleteChat = useCallback(async (id, e) => {
     e.stopPropagation()
@@ -280,7 +284,7 @@ function AIChat() {
       }
       loadChatHistory()
       toast.success('Chat deleted')
-    } catch (error) {
+    } catch {
       toast.error('Failed to delete chat')
     }
   }, [chatId, createNewChat])
@@ -290,7 +294,7 @@ function AIChat() {
       await aiAPI.updateChatTitle(id, newTitle)
       loadChatHistory()
       toast.success('Chat renamed')
-    } catch (error) {
+    } catch {
       toast.error('Failed to rename chat')
     }
   }, [])

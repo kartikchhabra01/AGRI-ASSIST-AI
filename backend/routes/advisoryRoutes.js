@@ -14,8 +14,8 @@ router.post('/chat', authMiddleware, validateAdvisoryQuery, advisoryController.s
 router.get('/history', authMiddleware, advisoryController.getHistory);
 router.get('/history/:id', authMiddleware, advisoryController.getQueryById);
 router.get('/search', authMiddleware, advisoryController.searchQueries);
+router.delete('/all', authMiddleware, advisoryController.deleteAllQueries);
 router.put('/:id', authMiddleware, advisoryController.updateQuery);
 router.delete('/:id', authMiddleware, advisoryController.deleteQuery);
-router.delete('/all', authMiddleware, advisoryController.deleteAllQueries);
 
 module.exports = router;
