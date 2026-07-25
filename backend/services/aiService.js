@@ -23,6 +23,67 @@ const getGenAI = () => {
   return genAI;
 };
 
+/**
+ * Sleep helper for retry delays
+ * @param {number} ms - Milliseconds to sleep
+ * @returns {Promise<void>}
+ */
+const sleep = (ms) => new Promise(resolve => setTimeout(resolve, ms));
+
+/**
+ * Retry function with exponential backoff
+ * Only retries on HTTP 503 and temporary network failures
+ * @param {Function} fn - Async function to retry
+ * @param {number} maxRetries - Maximum number of retries
+ * @param {Array<number>} delays - Array of delay times in ms
+ * @returns {Promise<any>} Result of the function
+ */
+const retryWithBackoff = async (fn, maxRetries = 3, delays = [2000, 4000, 8000]) => {
+  let lastError;
+  const startTime = Date.now();
+  
+  for (let attempt = 0; attempt <= maxRetries; attempt++) {
+    try {
+      const result = await fn();
+      const responseTime = Date.now() - startTime;
+      console.log(`AI Request succeeded on attempt ${attempt + 1}/${maxRetries + 1} in ${responseTime}ms`);
+      return result;
+    } catch (error) {
+      lastError = error;
+      const responseTime = Date.now() - startTime;
+      
+      console.log(`AI Request failed on attempt ${attempt + 1}/${maxRetries + 1} after ${responseTime}ms`);
+      console.log(`  Model: ${GEMINI_MODEL}`);
+      console.log(`  Status: ${error.status || 'Unknown'}`);
+      console.log(`  Message: ${error.message}`);
+      
+      // Don't retry on client errors (400, 401, 403, 404, etc.)
+      if (error.status && error.status >= 400 && error.status < 500) {
+        console.log('  Not retrying: Client error');
+        throw error;
+      }
+      
+      // Retry only on 503 (Service Unavailable) and network errors
+      const shouldRetry = (error.status === 503) || 
+                         (error.code === 'ECONNREFUSED') ||
+                         (error.code === 'ETIMEDOUT') ||
+                         (error.code === 'ENOTFOUND') ||
+                         (error.code === 'ERR_NETWORK');
+      
+      if (shouldRetry && attempt < maxRetries) {
+        const delay = delays[attempt] || delays[delays.length - 1];
+        console.log(`  Retrying in ${delay}ms...`);
+        await sleep(delay);
+      } else {
+        console.log('  Not retrying: Max retries reached or non-retryable error');
+        throw error;
+      }
+    }
+  }
+  
+  throw lastError;
+};
+
 // Agriculture-focused system prompt
 const SYSTEM_PROMPT = `You are AGRI ASSIST AI, an expert agricultural assistant specializing in helping farmers with crop management, disease diagnosis, fertilization, irrigation, pest control, soil health, weather impact, organic farming, and general crop management.
 
@@ -58,76 +119,82 @@ Respond in the language specified by the user (default: English).`;
  * @returns {Promise<string>} AI response
  */
 const generateResponse = async (messages, language = 'en', image = null) => {
-  try {
-    const languagePrompt = getLanguagePrompt(language);
-    const fullSystemPrompt = `${SYSTEM_PROMPT}\n\n${languagePrompt}`;
+  console.log(`Starting AI request with model: ${GEMINI_MODEL}`);
+  console.log(`  Language: ${language}`);
+  console.log(`  Has image: ${!!image}`);
+  console.log(`  Message count: ${messages.length}`);
+  
+  const languagePrompt = getLanguagePrompt(language);
+  const fullSystemPrompt = `${SYSTEM_PROMPT}\n\n${languagePrompt}`;
 
-    // Clean Base64 image - remove data URL prefix if present
-    let cleanImage = null;
-    if (image) {
-      cleanImage = image.replace(/^data:image\/[a-z]+;base64,/, '');
+  // Clean Base64 image - remove data URL prefix if present
+  let cleanImage = null;
+  if (image) {
+    cleanImage = image.replace(/^data:image\/[a-z]+;base64,/, '');
 
-      // Check image size (max 4MB for Gemini)
-      const imageSizeKB = cleanImage.length * 0.75 / 1024;
-      if (imageSizeKB > 4096) {
-        throw new Error('Image size exceeds 4MB limit. Please upload a smaller image.');
-      }
+    // Check image size (max 4MB for Gemini)
+    const imageSizeKB = cleanImage.length * 0.75 / 1024;
+    if (imageSizeKB > 4096) {
+      throw new Error('Image size exceeds 4MB limit. Please upload a smaller image.');
     }
+  }
 
-    // If image is provided, use vision model with single request
-    if (cleanImage) {
+  try {
+    const result = await retryWithBackoff(async () => {
+      // If image is provided, use vision model with single request
+      if (cleanImage) {
+        const model = getGenAI().getGenerativeModel({
+          model: GEMINI_MODEL,
+          systemInstruction: fullSystemPrompt
+        });
+
+        const lastUserMessage = messages[messages.length - 1];
+        const prompt = lastUserMessage?.content || 'Analyze this crop image';
+
+        const result = await model.generateContent([
+          prompt,
+          {
+            inlineData: {
+              data: cleanImage,
+              mimeType: 'image/jpeg'
+            }
+          }
+        ]);
+
+        return result.response.text();
+      }
+
+      // Text-only conversation with history
       const model = getGenAI().getGenerativeModel({
         model: GEMINI_MODEL,
         systemInstruction: fullSystemPrompt
       });
 
-      const lastUserMessage = messages[messages.length - 1];
-      const prompt = lastUserMessage?.content || 'Analyze this crop image';
+      // If there's no history (first message), use simple generateContent
+      if (messages.length === 1) {
+        const result = await model.generateContent(messages[0].content);
+        return result.response.text();
+      }
 
-      const result = await model.generateContent([
-        prompt,
-        {
-          inlineData: {
-            data: cleanImage,
-            mimeType: 'image/jpeg'
-          }
-        }
-      ]);
+      // Multi-turn conversation with history
+      const history = messages.slice(0, -1).map(msg => ({
+        role: msg.role === 'assistant' ? 'model' : 'user',
+        parts: [{ text: msg.content }]
+      }));
 
+      const chat = model.startChat({ history });
+
+      const lastMessage = messages[messages.length - 1];
+      const result = await chat.sendMessage(lastMessage.content);
       return result.response.text();
-    }
-
-    // Text-only conversation with history
-    const model = getGenAI().getGenerativeModel({
-      model: GEMINI_MODEL,
-      systemInstruction: fullSystemPrompt
     });
 
-    // If there's no history (first message), use simple generateContent
-    if (messages.length === 1) {
-      const result = await model.generateContent(messages[0].content);
-      return result.response.text();
-    }
-
-    // Multi-turn conversation with history
-    const history = messages.slice(0, -1).map(msg => ({
-      role: msg.role === 'assistant' ? 'model' : 'user',
-      parts: [{ text: msg.content }]
-    }));
-
-    const chat = model.startChat({ history });
-
-    const lastMessage = messages[messages.length - 1];
-    const result = await chat.sendMessage(lastMessage.content);
-    return result.response.text();
+    console.log(`AI request completed successfully`);
+    return result;
   } catch (error) {
-    console.error('Gemini API Error Details:');
-    console.error('Status:', error.status);
-    console.error('Message:', error.message);
-    if (error.response) {
-      console.error('Response:', JSON.stringify(error.response, null, 2));
-    }
-    throw new Error(`Gemini API Error (${error.status || 'Unknown'}): ${error.message}`);
+    console.error(`AI request failed after all retries`);
+    console.error(`  Final error: ${error.message}`);
+    throw new Error('The AI service is temporarily busy due to high demand. Please try again in a few moments.');
   }
 };
 
@@ -184,36 +251,50 @@ Provide specific treatment steps, prevention tips, and when to consult an expert
  * @returns {Promise<string>} Image analysis result
  */
 const analyzeImage = async (image, userQuery = '', language = 'en') => {
+  console.log(`Starting image analysis with model: ${GEMINI_MODEL}`);
+  console.log(`  Language: ${language}`);
+  console.log(`  Has user query: ${!!userQuery}`);
+  
+  const languagePrompt = getLanguagePrompt(language);
+  const fullSystemPrompt = `${SYSTEM_PROMPT}\n\n${languagePrompt}`;
+
+  const prompt = `Analyze this crop image and provide:\n1. Visible symptoms and observations\n2. Likely disease or condition\n3. Recommended treatment\n4. Prevention tips\n\n${userQuery ? `User question: ${userQuery}` : ''}`;
+
+  // Clean Base64 image
+  const cleanImage = image.replace(/^data:image\/[a-z]+;base64,/, '');
+
+  // Check image size (max 4MB for Gemini)
+  const imageSizeKB = cleanImage.length * 0.75 / 1024;
+  if (imageSizeKB > 4096) {
+    throw new Error('Image size exceeds 4MB limit. Please upload a smaller image.');
+  }
+
   try {
-    const model = getGenAI().getGenerativeModel({
-      model: GEMINI_MODEL,
-      systemInstruction: SYSTEM_PROMPT + '\n\n' + getLanguagePrompt(language)
+    const result = await retryWithBackoff(async () => {
+      const model = getGenAI().getGenerativeModel({
+        model: GEMINI_MODEL,
+        systemInstruction: fullSystemPrompt
+      });
+
+      const result = await model.generateContent([
+        prompt,
+        {
+          inlineData: {
+            data: cleanImage,
+            mimeType: 'image/jpeg'
+          }
+        }
+      ]);
+
+      return result.response.text();
     });
 
-    const prompt = `Analyze this crop image and provide:\n1. Visible symptoms and observations\n2. Likely disease or condition\n3. Recommended treatment\n4. Prevention tips\n\n${userQuery ? `User question: ${userQuery}` : ''}`;
-
-    // Clean Base64 image
-    const cleanImage = image.replace(/^data:image\/[a-z]+;base64,/, '');
-
-    const result = await model.generateContent([
-      prompt,
-      {
-        inlineData: {
-          data: cleanImage,
-          mimeType: 'image/jpeg'
-        }
-      }
-    ]);
-
-    return result.response.text();
+    console.log(`Image analysis completed successfully`);
+    return result;
   } catch (error) {
-    console.error('Image Analysis Error Details:');
-    console.error('Status:', error.status);
-    console.error('Message:', error.message);
-    if (error.response) {
-      console.error('Response:', JSON.stringify(error.response, null, 2));
-    }
-    throw new Error(`Image Analysis Error (${error.status || 'Unknown'}): ${error.message}`);
+    console.error(`Image analysis failed after all retries`);
+    console.error(`  Final error: ${error.message}`);
+    throw new Error('The AI service is temporarily busy due to high demand. Please try again in a few moments.');
   }
 };
 

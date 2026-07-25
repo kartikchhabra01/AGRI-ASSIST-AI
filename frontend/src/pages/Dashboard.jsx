@@ -33,7 +33,7 @@ import {
 } from 'lucide-react'
 import Navbar from '../components/Navbar'
 import Footer from '../components/Footer'
-import { Loader } from '../components/ui'
+import { Loader, Skeleton, CardSkeleton, StatsSkeleton, ErrorState } from '../components/ui'
 import { dashboardAPI, authAPI, aiAPI } from '../services/api'
 import toast from 'react-hot-toast'
 
@@ -90,20 +90,12 @@ function Dashboard() {
   const [user, setUser] = useState(null)
   const [weather, setWeather] = useState(null)
   const [weatherLoading, setWeatherLoading] = useState(true)
+  const [weatherError, setWeatherError] = useState(null)
   const [chatHistory, setChatHistory] = useState([])
-  const [farmHealth, setFarmHealth] = useState(85)
-  const [analytics, setAnalytics] = useState({
-    cropHealth: { healthy: 12, warning: 3, diseased: 1 },
-    imageAnalysis: { uploaded: 45, healthy: 38, diseased: 5, pending: 2 },
-    aiUsage: { questions: 128, imagesAnalyzed: 45, avgResponseTime: '1.2s' },
-    cropDistribution: { wheat: 35, rice: 25, tomato: 20, maize: 15, other: 5 },
-  })
-  const [upcomingTasks, setUpcomingTasks] = useState([
-    { task: 'Water Wheat Field', date: 'Today', priority: 'high' },
-    { task: 'Apply fertilizer', date: 'Tomorrow', priority: 'medium' },
-    { task: 'Crop inspection', date: 'Friday', priority: 'low' },
-    { task: 'Expected rainfall', date: 'Sunday', priority: 'info' },
-  ])
+  const [farmHealth, setFarmHealth] = useState(null)
+  const [analytics, setAnalytics] = useState(null)
+  const [analyticsError, setAnalyticsError] = useState(null)
+  const [upcomingTasks, setUpcomingTasks] = useState([])
 
   useEffect(() => {
     const fetchDashboardData = async () => {
@@ -122,23 +114,35 @@ function Dashboard() {
           setChatHistory(chatResponse.data || [])
         }
 
-        // TODO: Integrate real weather API (OpenWeatherMap, WeatherAPI, etc.)
-        // For now, using placeholder data
-        setWeather({
-          temperature: 28,
-          feelsLike: 30,
-          humidity: 67,
-          windSpeed: 12,
-          rainChance: 40,
-          uvIndex: 6,
-          sunrise: '05:45',
-          sunset: '19:30',
-          condition: 'Partly Cloudy',
-          icon: 'cloud-sun',
-        })
+        // Fetch dashboard analytics from backend
+        try {
+          const statsResponse = await dashboardAPI.getUserStats()
+          if (statsResponse.success) {
+            setAnalytics(statsResponse.data)
+            setFarmHealth(statsResponse.data.farmHealth || null)
+          }
+        } catch (error) {
+          console.error('Failed to fetch analytics:', error)
+          setAnalyticsError(error.message || 'Failed to load analytics')
+        }
 
-        // TODO: Fetch real analytics from backend
-        // For now, using placeholder data
+        // Fetch weather based on user's farm location
+        if (userData?.farmLocation) {
+          try {
+            const weatherResponse = await fetchWeather(userData.farmLocation)
+            if (weatherResponse) {
+              setWeather(weatherResponse)
+            } else {
+              setWeatherError('Weather data unavailable')
+            }
+          } catch (error) {
+            console.error('Failed to fetch weather:', error)
+            setWeatherError(error.message || 'Failed to load weather')
+          }
+        } else {
+          setWeatherError('Farm location not set')
+        }
+        setWeatherLoading(false)
 
         setLoading(false)
       } catch (error) {
@@ -171,25 +175,98 @@ function Dashboard() {
     return new Date(date).toLocaleDateString()
   }
 
+  const fetchWeather = async (location) => {
+    // Using OpenWeatherMap API
+    const API_KEY = import.meta.env.VITE_WEATHER_API_KEY
+    if (!API_KEY) {
+      console.warn('Weather API key not configured')
+      return null
+    }
+
+    try {
+      const response = await fetch(
+        `https://api.openweathermap.org/data/2.5/weather?q=${encodeURIComponent(location)}&units=metric&appid=${API_KEY}`
+      )
+      const data = await response.json()
+
+      if (data.cod !== 200) {
+        throw new Error(data.message || 'Weather API error')
+      }
+
+      return {
+        temperature: Math.round(data.main.temp),
+        feelsLike: Math.round(data.main.feels_like),
+        humidity: data.main.humidity,
+        windSpeed: Math.round(data.wind.speed * 3.6), // Convert m/s to km/h
+        rainChance: data.rain?.['1h'] ? Math.min(100, data.rain['1h'] * 10) : 0,
+        uvIndex: 0, // UV index requires separate API call
+        sunrise: new Date(data.sys.sunrise * 1000).toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit' }),
+        sunset: new Date(data.sys.sunset * 1000).toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit' }),
+        condition: data.weather[0].description,
+        icon: data.weather[0].icon,
+      }
+    } catch (error) {
+      console.error('Weather fetch error:', error)
+      throw error
+    }
+  }
+
+  const handleRetryWeather = async () => {
+    setWeatherError(null)
+    setWeatherLoading(true)
+    const userData = authAPI.getUser()
+    if (userData?.farmLocation) {
+      try {
+        const weatherResponse = await fetchWeather(userData.farmLocation)
+        if (weatherResponse) {
+          setWeather(weatherResponse)
+        } else {
+          setWeatherError('Weather data unavailable')
+        }
+      } catch (error) {
+        setWeatherError(error.message || 'Failed to load weather')
+      }
+    }
+    setWeatherLoading(false)
+  }
+
+  const handleRetryAnalytics = async () => {
+    setAnalyticsError(null)
+    try {
+      const statsResponse = await dashboardAPI.getUserStats()
+      if (statsResponse.success) {
+        setAnalytics(statsResponse.data)
+        setFarmHealth(statsResponse.data.farmHealth || null)
+      }
+    } catch (error) {
+      setAnalyticsError(error.message || 'Failed to load analytics')
+    }
+  }
+
   const getAIRecommendation = () => {
-    if (!weather) return 'Loading recommendation...'
+    if (!weather) return 'Weather data unavailable'
+    if (!analytics) return 'Loading recommendations...'
     
     const recommendations = []
     
     if (weather.temperature > 25 && weather.humidity < 70) {
-      recommendations.push('Good weather for irrigation.')
+      recommendations.push('Good weather for irrigation today.')
     }
     
     if (weather.rainChance > 30) {
-      recommendations.push('Avoid pesticide spraying after 4 PM because rain is expected.')
+      recommendations.push('Rain expected - avoid pesticide spraying.')
     }
     
-    if (weather.uvIndex > 6) {
-      recommendations.push('High UV index - protect crops during peak hours.')
+    if (weather.temperature > 35) {
+      recommendations.push('High temperature - ensure adequate irrigation.')
+    }
+    
+    if (weather.humidity > 80) {
+      recommendations.push('High humidity - monitor for fungal diseases.')
     }
     
     if (recommendations.length === 0) {
-      return 'Weather conditions are normal. Continue regular farming activities.'
+      return 'Weather conditions are favorable. Continue regular farming activities.'
     }
     
     return recommendations.join(' ')
@@ -234,7 +311,7 @@ function Dashboard() {
                 <span>{formatDate()}</span>
                 <span className="mx-2">•</span>
                 <MapPin className="h-4 w-4" />
-                <span>Dehradun, India</span>
+                <span>{user?.farmLocation || 'Location not set'}</span>
               </div>
             </div>
           </motion.div>
@@ -280,25 +357,30 @@ function Dashboard() {
               {/* Top Row: Weather + Farm Health */}
               <div className="mb-6 grid grid-cols-1 gap-4 sm:grid-cols-2 lg:mb-8">
                 {/* Weather Card */}
-                <motion.div
-                  initial={{ opacity: 0, y: 20 }}
-                  animate={{ opacity: 1, y: 0 }}
-                  transition={{ duration: 0.4, delay: 0.1 }}
-                  className="glass rounded-2xl p-5 shadow-lg shadow-agri-900/5 dark:shadow-black/20 sm:p-6"
-                >
-                  <div className="flex items-start justify-between">
-                    <div>
-                      <h3 className="text-lg font-semibold text-slate-900 dark:text-white">
-                        Today's Weather
-                      </h3>
-                      <p className="text-sm text-slate-500 dark:text-slate-400">
-                        {weather?.condition || 'Loading...'}
-                      </p>
+                {weatherLoading ? (
+                  <CardSkeleton />
+                ) : weatherError ? (
+                  <ErrorState message={weatherError} onRetry={handleRetryWeather} variant="warning" />
+                ) : (
+                  <motion.div
+                    initial={{ opacity: 0, y: 20 }}
+                    animate={{ opacity: 1, y: 0 }}
+                    transition={{ duration: 0.4, delay: 0.1 }}
+                    className="glass rounded-2xl p-5 shadow-lg shadow-agri-900/5 dark:shadow-black/20 sm:p-6"
+                  >
+                    <div className="flex items-start justify-between">
+                      <div>
+                        <h3 className="text-lg font-semibold text-slate-900 dark:text-white">
+                          Today's Weather
+                        </h3>
+                        <p className="text-sm text-slate-500 dark:text-slate-400">
+                          {weather?.condition || 'Weather unavailable'}
+                        </p>
+                      </div>
+                      <div className="flex h-12 w-12 items-center justify-center rounded-xl bg-gradient-to-br from-sky-400 to-sky-600 text-white shadow-lg shadow-sky-500/30">
+                        <Sun className="h-6 w-6" />
+                      </div>
                     </div>
-                    <div className="flex h-12 w-12 items-center justify-center rounded-xl bg-gradient-to-br from-sky-400 to-sky-600 text-white shadow-lg shadow-sky-500/30">
-                      <Sun className="h-6 w-6" />
-                    </div>
-                  </div>
                   
                   <div className="mt-4 grid grid-cols-2 gap-4">
                     <div className="flex items-center gap-2">
@@ -371,9 +453,11 @@ function Dashboard() {
                       </span>
                     </div>
                   </div>
-                </motion.div>
+                  </motion.div>
+                )}
 
                 {/* Farm Health Score */}
+                {!weatherLoading && (
                 <motion.div
                   initial={{ opacity: 0, y: 20 }}
                   animate={{ opacity: 1, y: 0 }}
@@ -406,15 +490,17 @@ function Dashboard() {
                           stroke="currentColor"
                           strokeWidth="12"
                           fill="none"
-                          strokeDasharray={`${farmHealth * 3.52} 352`}
+                          strokeDasharray={`${(farmHealth || 0) * 3.52} 352`}
                           className="text-agri-600 transition-all duration-1000"
                         />
                       </svg>
                       <div className="absolute inset-0 flex flex-col items-center justify-center">
                         <span className="text-3xl font-bold text-slate-900 dark:text-white">
-                          {farmHealth}%
+                          {farmHealth !== null ? `${farmHealth}%` : '--'}
                         </span>
-                        <span className="text-xs font-medium text-agri-600">Excellent</span>
+                        <span className="text-xs font-medium text-agri-600">
+                          {farmHealth !== null ? (farmHealth >= 80 ? 'Excellent' : farmHealth >= 60 ? 'Good' : 'Needs Attention') : 'Loading'}
+                        </span>
                       </div>
                     </div>
                   </div>
@@ -439,6 +525,7 @@ function Dashboard() {
                     </div>
                   </div>
                 </motion.div>
+                )}
               </div>
 
               {/* AI Recommendation Card */}
@@ -510,7 +597,12 @@ function Dashboard() {
               {/* Middle Row: Analytics */}
               <div className="mb-6 grid grid-cols-1 gap-4 lg:mb-8 lg:grid-cols-3">
                 {/* Crop Health Trend */}
-                <motion.div
+                {loading ? (
+                  <StatsSkeleton />
+                ) : analyticsError ? (
+                  <ErrorState message={analyticsError} onRetry={handleRetryAnalytics} variant="default" />
+                ) : (
+                  <motion.div
                   initial={{ opacity: 0, y: 20 }}
                   animate={{ opacity: 1, y: 0 }}
                   transition={{ duration: 0.4, delay: 0.5 }}
@@ -524,38 +616,50 @@ function Dashboard() {
                   </p>
                   
                   <div className="mt-4 space-y-3">
-                    <div className="flex items-center justify-between">
-                      <div className="flex items-center gap-2">
-                        <CheckCircle2 className="h-4 w-4 text-green-600" />
-                        <span className="text-sm text-slate-700 dark:text-slate-300">Healthy</span>
-                      </div>
-                      <span className="text-sm font-semibold text-slate-900 dark:text-white">
-                        {analytics.cropHealth.healthy}
-                      </span>
-                    </div>
-                    <div className="flex items-center justify-between">
-                      <div className="flex items-center gap-2">
-                        <AlertCircle className="h-4 w-4 text-amber-600" />
-                        <span className="text-sm text-slate-700 dark:text-slate-300">Warning</span>
-                      </div>
-                      <span className="text-sm font-semibold text-slate-900 dark:text-white">
-                        {analytics.cropHealth.warning}
-                      </span>
-                    </div>
-                    <div className="flex items-center justify-between">
-                      <div className="flex items-center gap-2">
-                        <Zap className="h-4 w-4 text-red-600" />
-                        <span className="text-sm text-slate-700 dark:text-slate-300">Disease Detected</span>
-                      </div>
-                      <span className="text-sm font-semibold text-slate-900 dark:text-white">
-                        {analytics.cropHealth.diseased}
-                      </span>
-                    </div>
+                    {analytics?.cropHealth ? (
+                      <>
+                        <div className="flex items-center justify-between">
+                          <div className="flex items-center gap-2">
+                            <CheckCircle2 className="h-4 w-4 text-green-600" />
+                            <span className="text-sm text-slate-700 dark:text-slate-300">Healthy</span>
+                          </div>
+                          <span className="text-sm font-semibold text-slate-900 dark:text-white">
+                            {analytics.cropHealth.healthy || 0}
+                          </span>
+                        </div>
+                        <div className="flex items-center justify-between">
+                          <div className="flex items-center gap-2">
+                            <AlertCircle className="h-4 w-4 text-amber-600" />
+                            <span className="text-sm text-slate-700 dark:text-slate-300">Warning</span>
+                          </div>
+                          <span className="text-sm font-semibold text-slate-900 dark:text-white">
+                            {analytics.cropHealth.warning || 0}
+                          </span>
+                        </div>
+                        <div className="flex items-center justify-between">
+                          <div className="flex items-center gap-2">
+                            <Zap className="h-4 w-4 text-red-600" />
+                            <span className="text-sm text-slate-700 dark:text-slate-300">Disease Detected</span>
+                          </div>
+                          <span className="text-sm font-semibold text-slate-900 dark:text-white">
+                            {analytics.cropHealth.diseased || 0}
+                          </span>
+                        </div>
+                      </>
+                    ) : (
+                      <p className="text-sm text-slate-500 dark:text-slate-400">No crop health data available</p>
+                    )}
                   </div>
                 </motion.div>
+                )}
 
                 {/* Image Analysis Statistics */}
-                <motion.div
+                {loading ? (
+                  <StatsSkeleton />
+                ) : analyticsError ? (
+                  <ErrorState message={analyticsError} onRetry={handleRetryAnalytics} variant="default" />
+                ) : (
+                  <motion.div
                   initial={{ opacity: 0, y: 20 }}
                   animate={{ opacity: 1, y: 0 }}
                   transition={{ duration: 0.4, delay: 0.6 }}
@@ -569,35 +673,49 @@ function Dashboard() {
                   </p>
                   
                   <div className="mt-4 grid grid-cols-2 gap-4">
-                    <div className="rounded-xl bg-slate-50 p-3 dark:bg-zinc-800">
-                      <p className="text-xs text-slate-500 dark:text-slate-400">Uploaded</p>
-                      <p className="text-lg font-semibold text-slate-900 dark:text-white">
-                        {analytics.imageAnalysis.uploaded}
-                      </p>
-                    </div>
-                    <div className="rounded-xl bg-green-50 p-3 dark:bg-green-900/20">
-                      <p className="text-xs text-green-600 dark:text-green-400">Healthy</p>
-                      <p className="text-lg font-semibold text-green-700 dark:text-green-300">
-                        {analytics.imageAnalysis.healthy}
-                      </p>
-                    </div>
-                    <div className="rounded-xl bg-red-50 p-3 dark:bg-red-900/20">
-                      <p className="text-xs text-red-600 dark:text-red-400">Diseased</p>
-                      <p className="text-lg font-semibold text-red-700 dark:text-red-300">
-                        {analytics.imageAnalysis.diseased}
-                      </p>
-                    </div>
-                    <div className="rounded-xl bg-amber-50 p-3 dark:bg-amber-900/20">
-                      <p className="text-xs text-amber-600 dark:text-amber-400">Pending</p>
-                      <p className="text-lg font-semibold text-amber-700 dark:text-amber-300">
-                        {analytics.imageAnalysis.pending}
-                      </p>
-                    </div>
+                    {analytics?.imageAnalysis ? (
+                      <>
+                        <div className="rounded-xl bg-slate-50 p-3 dark:bg-zinc-800">
+                          <p className="text-xs text-slate-500 dark:text-slate-400">Uploaded</p>
+                          <p className="text-lg font-semibold text-slate-900 dark:text-white">
+                            {analytics.imageAnalysis.uploaded || 0}
+                          </p>
+                        </div>
+                        <div className="rounded-xl bg-green-50 p-3 dark:bg-green-900/20">
+                          <p className="text-xs text-green-600 dark:text-green-400">Healthy</p>
+                          <p className="text-lg font-semibold text-green-700 dark:text-green-300">
+                            {analytics.imageAnalysis.healthy || 0}
+                          </p>
+                        </div>
+                        <div className="rounded-xl bg-red-50 p-3 dark:bg-red-900/20">
+                          <p className="text-xs text-red-600 dark:text-red-400">Diseased</p>
+                          <p className="text-lg font-semibold text-red-700 dark:text-red-300">
+                            {analytics.imageAnalysis.diseased || 0}
+                          </p>
+                        </div>
+                        <div className="rounded-xl bg-amber-50 p-3 dark:bg-amber-900/20">
+                          <p className="text-xs text-amber-600 dark:text-amber-400">Pending</p>
+                          <p className="text-lg font-semibold text-amber-700 dark:text-amber-300">
+                            {analytics.imageAnalysis.pending || 0}
+                          </p>
+                        </div>
+                      </>
+                    ) : (
+                      <div className="col-span-2 rounded-xl bg-slate-50 p-3 dark:bg-zinc-800">
+                        <p className="text-sm text-slate-500 dark:text-slate-400 text-center">No image analysis data</p>
+                      </div>
+                    )}
                   </div>
                 </motion.div>
+                )}
 
                 {/* AI Usage */}
-                <motion.div
+                {loading ? (
+                  <StatsSkeleton />
+                ) : analyticsError ? (
+                  <ErrorState message={analyticsError} onRetry={handleRetryAnalytics} variant="default" />
+                ) : (
+                  <motion.div
                   initial={{ opacity: 0, y: 20 }}
                   animate={{ opacity: 1, y: 0 }}
                   transition={{ duration: 0.4, delay: 0.7 }}
@@ -611,146 +729,94 @@ function Dashboard() {
                   </p>
                   
                   <div className="mt-4 space-y-3">
-                    <div className="flex items-center justify-between">
-                      <span className="text-sm text-slate-600 dark:text-slate-400">Questions Asked</span>
-                      <span className="text-sm font-semibold text-slate-900 dark:text-white">
-                        {analytics.aiUsage.questions}
-                      </span>
-                    </div>
-                    <div className="flex items-center justify-between">
-                      <span className="text-sm text-slate-600 dark:text-slate-400">Images Analyzed</span>
-                      <span className="text-sm font-semibold text-slate-900 dark:text-white">
-                        {analytics.aiUsage.imagesAnalyzed}
-                      </span>
-                    </div>
-                    <div className="flex items-center justify-between">
-                      <span className="text-sm text-slate-600 dark:text-slate-400">Avg Response Time</span>
-                      <span className="text-sm font-semibold text-slate-900 dark:text-white">
-                        {analytics.aiUsage.avgResponseTime}
-                      </span>
-                    </div>
-                  </div>
-                </motion.div>
-              </div>
-
-              {/* Bottom Row: Recent Activity + Upcoming Tasks */}
-              <div className="grid grid-cols-1 gap-4 lg:grid-cols-2">
-                {/* Recent AI Activity */}
-                <motion.div
-                  initial={{ opacity: 0, y: 20 }}
-                  animate={{ opacity: 1, y: 0 }}
-                  transition={{ duration: 0.4, delay: 0.8 }}
-                  className="glass rounded-2xl p-5 shadow-lg shadow-agri-900/5 dark:shadow-black/20 sm:p-6"
-                >
-                  <div className="flex items-center justify-between">
-                    <h3 className="text-lg font-semibold text-slate-900 dark:text-white">
-                      Recent Conversations
-                    </h3>
-                    <button
-                      onClick={() => navigate('/chat')}
-                      className="text-sm font-semibold text-agri-600 hover:text-agri-700 dark:text-agri-400 dark:hover:text-agri-300"
-                    >
-                      View All
-                    </button>
-                  </div>
-                  
-                  <div className="mt-4 space-y-3">
-                    {chatHistory.slice(0, 4).map((chat) => (
-                      <button
-                        key={chat._id}
-                        onClick={() => navigate(`/chat?chatId=${chat._id}`)}
-                        className="w-full rounded-xl border border-slate-100 bg-white/50 p-3 text-left transition-all hover:border-agri-200 hover:bg-agri-50/50 dark:border-zinc-700 dark:bg-zinc-800/50 dark:hover:border-agri-600 dark:hover:bg-agri-900/20"
-                      >
-                        <div className="flex items-start justify-between gap-2">
-                          <div className="min-w-0 flex-1">
-                            <p className="truncate text-sm font-medium text-slate-900 dark:text-white">
-                              {chat.title || 'New Chat'}
-                            </p>
-                            <p className="mt-1 text-xs text-slate-500 dark:text-slate-400">
-                              {chat.messages?.[0]?.content?.substring(0, 50) || 'No messages'}...
-                            </p>
-                          </div>
-                          <div className="flex shrink-0 items-center gap-1 text-xs text-slate-400">
-                            <Clock className="h-3 w-3" />
-                            <span>{formatTime(chat.createdAt)}</span>
-                          </div>
+                    {analytics?.aiUsage ? (
+                      <>
+                        <div className="flex items-center justify-between">
+                          <span className="text-sm text-slate-600 dark:text-slate-400">Questions Asked</span>
+                          <span className="text-sm font-semibold text-slate-900 dark:text-white">
+                            {analytics.aiUsage.questions || 0}
+                          </span>
                         </div>
-                      </button>
-                    ))}
-                    
-                    {chatHistory.length === 0 && (
-                      <div className="rounded-xl border border-dashed border-slate-200 p-6 text-center dark:border-zinc-700">
-                        <MessageSquare className="mx-auto h-8 w-8 text-slate-400" />
-                        <p className="mt-2 text-sm text-slate-500 dark:text-slate-400">
-                          No conversations yet
-                        </p>
-                        <button
-                          onClick={() => navigate('/chat')}
-                          className="mt-2 text-sm font-semibold text-agri-600 hover:text-agri-700 dark:text-agri-400 dark:hover:text-agri-300"
-                        >
-                          Start your first chat
-                        </button>
-                      </div>
+                        <div className="flex items-center justify-between">
+                          <span className="text-sm text-slate-600 dark:text-slate-400">Images Analyzed</span>
+                          <span className="text-sm font-semibold text-slate-900 dark:text-white">
+                            {analytics.aiUsage.imagesAnalyzed || 0}
+                          </span>
+                        </div>
+                        <div className="flex items-center justify-between">
+                          <span className="text-sm text-slate-600 dark:text-slate-400">Avg Response Time</span>
+                          <span className="text-sm font-semibold text-slate-900 dark:text-white">
+                            {analytics.aiUsage.avgResponseTime || '--'}
+                          </span>
+                        </div>
+                      </>
+                    ) : (
+                      <p className="text-sm text-slate-500 dark:text-slate-400">No usage data available</p>
                     )}
                   </div>
                 </motion.div>
+                )}
+              </div>
 
-                {/* Upcoming Tasks */}
-                <motion.div
-                  initial={{ opacity: 0, y: 20 }}
-                  animate={{ opacity: 1, y: 0 }}
-                  transition={{ duration: 0.4, delay: 0.9 }}
-                  className="glass rounded-2xl p-5 shadow-lg shadow-agri-900/5 dark:shadow-black/20 sm:p-6"
-                >
-                  <div className="flex items-center justify-between">
-                    <h3 className="text-lg font-semibold text-slate-900 dark:text-white">
-                      Upcoming Tasks
-                    </h3>
-                    <button className="text-sm font-semibold text-agri-600 hover:text-agri-700 dark:text-agri-400 dark:hover:text-agri-300">
-                      Manage
-                    </button>
-                  </div>
+              {/* Recent Activity */}
+              <motion.div
+                initial={{ opacity: 0, y: 20 }}
+                animate={{ opacity: 1, y: 0 }}
+                transition={{ duration: 0.4, delay: 0.8 }}
+                className="glass rounded-2xl p-5 shadow-lg shadow-agri-900/5 dark:shadow-black/20 sm:p-6"
+              >
+                <div className="flex items-center justify-between">
+                  <h3 className="text-lg font-semibold text-slate-900 dark:text-white">
+                    Recent Conversations
+                  </h3>
+                  <button
+                    onClick={() => navigate('/chat')}
+                    className="text-sm font-semibold text-agri-600 hover:text-agri-700 dark:text-agri-400 dark:hover:text-agri-300"
+                  >
+                    View All
+                  </button>
+                </div>
                   
-                  <div className="mt-4 space-y-3">
-                    {upcomingTasks.map((task, index) => (
-                      <div
-                        key={index}
-                        className="flex items-center gap-3 rounded-xl border border-slate-100 bg-white/50 p-3 dark:border-zinc-700 dark:bg-zinc-800/50"
-                      >
-                        <div
-                          className={`flex h-8 w-8 shrink-0 items-center justify-center rounded-lg ${
-                            task.priority === 'high'
-                              ? 'bg-red-100 text-red-600 dark:bg-red-900/50 dark:text-red-400'
-                              : task.priority === 'medium'
-                              ? 'bg-amber-100 text-amber-600 dark:bg-amber-900/50 dark:text-amber-400'
-                              : task.priority === 'info'
-                              ? 'bg-blue-100 text-blue-600 dark:bg-blue-900/50 dark:text-blue-400'
-                              : 'bg-green-100 text-green-600 dark:bg-green-900/50 dark:text-green-400'
-                          }`}
-                        >
-                          <Calendar className="h-4 w-4" />
+                <div className="mt-4 space-y-3">
+                  {chatHistory.slice(0, 4).map((chat) => (
+                    <button
+                      key={chat._id}
+                      onClick={() => navigate(`/chat?chatId=${chat._id}`)}
+                      className="w-full rounded-xl border border-slate-100 bg-white/50 p-3 text-left transition-all hover:border-agri-200 hover:bg-agri-50/50 dark:border-zinc-700 dark:bg-zinc-800/50 dark:hover:border-agri-600 dark:hover:bg-agri-900/20"
+                    >
+                      <div className="flex items-start justify-between gap-2">
+                        <div className="min-w-0 flex-1">
+                          <p className="truncate text-sm font-medium text-slate-900 dark:text-white">
+                            {chat.title || 'New Chat'}
+                          </p>
+                          <p className="mt-1 text-xs text-slate-500 dark:text-slate-400">
+                            {chat.messages?.[0]?.content?.substring(0, 50) || 'No messages'}...
+                          </p>
                         </div>
-                        <div className="flex-1">
-                          <p className="text-sm font-medium text-slate-900 dark:text-white">
-                            {task.task}
-                          </p>
-                          <p className="text-xs text-slate-500 dark:text-slate-400">
-                            {task.date}
-                          </p>
+                        <div className="flex shrink-0 items-center gap-1 text-xs text-slate-400">
+                          <Clock className="h-3 w-3" />
+                          <span>{formatTime(chat.createdAt)}</span>
                         </div>
                       </div>
-                    ))}
-                    
-                    <button
-                      onClick={() => navigate('/chat')}
-                      className="flex w-full items-center justify-center gap-2 rounded-xl border-2 border-dashed border-slate-200 p-3 text-sm font-medium text-slate-600 transition-all hover:border-agri-300 hover:bg-agri-50 dark:border-zinc-700 dark:text-slate-400 dark:hover:border-agri-600 dark:hover:bg-agri-900/20"
-                    >
-                      <Sparkles className="h-4 w-4" />
-                      Ask AI to create a farming plan
                     </button>
-                  </div>
-                </motion.div>
-              </div>
+                  ))}
+                  
+                  {chatHistory.length === 0 && (
+                    <div className="rounded-xl border border-dashed border-slate-200 p-6 text-center dark:border-zinc-700">
+                      <MessageSquare className="mx-auto h-8 w-8 text-slate-400" />
+                      <p className="mt-2 text-sm text-slate-500 dark:text-slate-400">
+                        No conversations yet
+                      </p>
+                      <button
+                        onClick={() => navigate('/chat')}
+                        className="mt-2 text-sm font-semibold text-agri-600 hover:text-agri-700 dark:text-agri-400 dark:hover:text-agri-300"
+                      >
+                        Start your first chat
+                      </button>
+                    </div>
+                  )}
+                </div>
+              </motion.div>
             </>
           )}
         </div>

@@ -7,7 +7,6 @@ const footerLinks = [
   { label: 'About', path: '/about' },
   { label: 'Dashboard', path: '/dashboard' },
   { label: 'AI Chat', path: '/chat' },
-  { label: 'Components', path: '/components' },
   { label: 'Login', path: '/login' },
 ]
 

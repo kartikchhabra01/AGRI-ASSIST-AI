@@ -6,6 +6,7 @@
 const User = require('../models/User');
 const Query = require('../models/Query');
 const CropHealth = require('../models/CropHealth');
+const Chat = require('../models/Chat');
 
 /**
  * Get dashboard statistics
@@ -17,6 +18,7 @@ const getStats = async (req, res, next) => {
     const totalUsers = await User.countDocuments();
     const totalQueries = await Query.countDocuments();
     const totalCropReports = await CropHealth.countDocuments();
+    const totalChats = await Chat.countDocuments();
 
     // Find most common disease
     const diseaseAggregation = await CropHealth.aggregate([
@@ -48,6 +50,10 @@ const getStats = async (req, res, next) => {
       createdAt: { $gte: sevenDaysAgo }
     });
 
+    const recentChats = await Chat.countDocuments({
+      createdAt: { $gte: sevenDaysAgo }
+    });
+
     // Calculate reports by severity
     const severityBreakdown = await CropHealth.aggregate([
       { $group: { _id: '$severity', count: { $sum: 1 } } }
@@ -71,9 +77,11 @@ const getStats = async (req, res, next) => {
         totalUsers,
         totalQueries,
         totalCropReports,
+        totalChats,
         mostCommonDisease,
         mostCommonCrop,
         recentQueries,
+        recentChats,
         severityBreakdown: severityCount
       }
     });
@@ -93,6 +101,7 @@ const getUserStats = async (req, res, next) => {
     // Get user's data
     const totalQueries = await Query.countDocuments({ userId });
     const totalReports = await CropHealth.countDocuments({ userId });
+    const totalChats = await Chat.countDocuments({ userId });
 
     // Get recent queries (last 7 days)
     const sevenDaysAgo = new Date();
@@ -103,27 +112,37 @@ const getUserStats = async (req, res, next) => {
       createdAt: { $gte: sevenDaysAgo }
     });
 
+    const recentChats = await Chat.countDocuments({
+      userId,
+      createdAt: { $gte: sevenDaysAgo }
+    });
+
     // Get crops queried
     const cropsQueried = await Query.distinct('crop', { userId });
 
     // Get last activity
     const lastQuery = await Query.findOne({ userId }).sort({ createdAt: -1 });
     const lastReport = await CropHealth.findOne({ userId }).sort({ createdAt: -1 });
+    const lastChat = await Chat.findOne({ userId }).sort({ updatedAt: -1 });
 
-    const lastActivity = lastQuery && lastReport
-      ? (lastQuery.createdAt > lastReport.createdAt ? lastQuery.createdAt : lastReport.createdAt)
-      : lastQuery
-        ? lastQuery.createdAt
-        : lastReport
-          ? lastReport.createdAt
-          : null;
+    const activityDates = [
+      lastQuery?.createdAt,
+      lastReport?.createdAt,
+      lastChat?.updatedAt
+    ].filter(Boolean);
+
+    const lastActivity = activityDates.length > 0
+      ? new Date(Math.max(...activityDates.map(d => new Date(d).getTime())))
+      : null;
 
     res.status(200).json({
       success: true,
       data: {
         totalQueries,
         totalReports,
+        totalChats,
         recentQueries,
+        recentChats,
         cropsQueried,
         lastActivity
       }

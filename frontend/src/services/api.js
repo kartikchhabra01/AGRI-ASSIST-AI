@@ -219,9 +219,50 @@ export const dashboardAPI = {
   },
 };
 
+/**
+ * AI Chat API
+ */
+export const aiAPI = {
+  sendMessage: async (messageData) => {
+    return request('/ai/chat', {
+      method: 'POST',
+      body: JSON.stringify(messageData),
+    });
+  },
+
+  getChatHistory: async () => {
+    return request('/ai/history');
+  },
+
+  getChatById: async (id) => {
+    return request(`/ai/history/${id}`);
+  },
+
+  updateChatTitle: async (id, title) => {
+    return request(`/ai/history/${id}`, {
+      method: 'PUT',
+      body: JSON.stringify({ title }),
+    });
+  },
+
+  deleteChat: async (id) => {
+    return request(`/ai/history/${id}`, {
+      method: 'DELETE',
+    });
+  },
+
+  createNewChat: async (language = 'en') => {
+    return request('/ai/new-chat', {
+      method: 'POST',
+      body: JSON.stringify({ language }),
+    });
+  },
+};
+
 export default {
   authAPI,
   advisoryAPI,
   cropAPI,
   dashboardAPI,
+  aiAPI,
 };

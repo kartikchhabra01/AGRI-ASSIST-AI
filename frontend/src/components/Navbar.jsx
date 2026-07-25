@@ -9,7 +9,6 @@ import Logo from './Logo'
 const publicNavLinks = [
   { label: 'Home', path: '/' },
   { label: 'About', path: '/about' },
-  { label: 'Components', path: '/components' },
 ]
 
 const authNavLinks = [
@@ -39,8 +38,8 @@ function Navbar() {
   }
 
   return (
-    <header className="fixed top-0 left-0 right-0 z-50 px-4 pt-4 sm:px-6">
-      <nav className="glass mx-auto flex max-w-7xl items-center justify-between rounded-2xl px-4 py-3 shadow-lg shadow-agri-900/5 dark:shadow-black/20 sm:px-6">
+    <header className="fixed top-0 left-0 right-0 z-50 px-4 pt-2 sm:px-6 h-20">
+      <nav className="glass mx-auto flex h-full max-w-7xl items-center justify-between rounded-2xl px-4 py-2 shadow-lg shadow-agri-900/5 dark:shadow-black/20 sm:px-6">
         <Logo />
 
         <div className="hidden items-center gap-1 lg:flex">

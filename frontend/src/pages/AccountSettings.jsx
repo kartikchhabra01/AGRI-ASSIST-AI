@@ -16,6 +16,8 @@ function AccountSettings() {
   const [name, setName] = useState('')
   const [farmLocation, setFarmLocation] = useState('')
   const [cropType, setCropType] = useState('')
+  const [email, setEmail] = useState('')
+  const [memberSince, setMemberSince] = useState('')
   const [updatingProfile, setUpdatingProfile] = useState(false)
   
   // Password change state
@@ -47,14 +49,24 @@ function AccountSettings() {
       const userData = authAPI.getUser()
       if (userData) {
         setName(userData.name || '')
+        setEmail(userData.email || '')
         setFarmLocation(userData.farmLocation || '')
         setCropType(userData.cropType || '')
+        if (userData.createdAt) {
+          const date = new Date(userData.createdAt)
+          setMemberSince(date.toLocaleDateString('en-US', { year: 'numeric', month: 'long', day: 'numeric' }))
+        }
       } else {
         const response = await authAPI.getCurrentUser()
         if (response.success) {
           setName(response.data.user.name || '')
+          setEmail(response.data.user.email || '')
           setFarmLocation(response.data.user.farmLocation || '')
           setCropType(response.data.user.cropType || '')
+          if (response.data.user.createdAt) {
+            const date = new Date(response.data.user.createdAt)
+            setMemberSince(date.toLocaleDateString('en-US', { year: 'numeric', month: 'long', day: 'numeric' }))
+          }
         }
       }
     } catch {
@@ -210,6 +222,20 @@ function AccountSettings() {
             <form onSubmit={handleUpdateProfile} className="space-y-4">
               <div>
                 <label className="mb-2 block text-sm font-medium text-slate-700 dark:text-slate-300">
+                  Email Address
+                </label>
+                <Input
+                  value={email}
+                  disabled
+                  className="bg-slate-100 text-slate-500 dark:bg-zinc-800 dark:text-slate-400"
+                />
+                <p className="mt-1 text-xs text-slate-500 dark:text-slate-400">
+                  Email cannot be changed
+                </p>
+              </div>
+
+              <div>
+                <label className="mb-2 block text-sm font-medium text-slate-700 dark:text-slate-300">
                   Full Name
                 </label>
                 <Input
@@ -218,6 +244,19 @@ function AccountSettings() {
                   placeholder="Your name"
                 />
               </div>
+
+              {memberSince && (
+                <div>
+                  <label className="mb-2 block text-sm font-medium text-slate-700 dark:text-slate-300">
+                    Member Since
+                  </label>
+                  <Input
+                    value={memberSince}
+                    disabled
+                    className="bg-slate-100 text-slate-500 dark:bg-zinc-800 dark:text-slate-400"
+                  />
+                </div>
+              )}
 
               <div>
                 <label className="mb-2 block text-sm font-medium text-slate-700 dark:text-slate-300">

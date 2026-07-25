@@ -31,6 +31,7 @@ const authRoutes = require('./routes/authRoutes');
 const advisoryRoutes = require('./routes/advisoryRoutes');
 const cropRoutes = require('./routes/cropRoutes');
 const dashboardRoutes = require('./routes/dashboardRoutes');
+const aiRoutes = require('./routes/aiRoutes');
 
 // Initialize Express app
 const app = express();
@@ -51,6 +52,7 @@ app.use('/api/auth', authRoutes);
 app.use('/api/advisory', advisoryRoutes);
 app.use('/api/crop', cropRoutes);
 app.use('/api/dashboard', dashboardRoutes);
+app.use('/api/ai', aiRoutes);
 
 // Root route
 app.get('/', (req, res) => {
@@ -61,7 +63,8 @@ app.get('/', (req, res) => {
       auth: '/api/auth',
       advisory: '/api/advisory',
       crop: '/api/crop',
-      dashboard: '/api/dashboard'
+      dashboard: '/api/dashboard',
+      ai: '/api/ai'
     }
   });
 });
@@ -75,16 +78,8 @@ app.use((req, res) => {
 });
 
 // Error handling middleware (must be last)
-app.use((err, req, res, next) => {
-  const statusCode = err.statusCode || 500;
-  const message = err.message || 'Internal Server Error';
-  
-  res.status(statusCode).json({
-    success: false,
-    message,
-    stack: process.env.NODE_ENV === 'development' ? err.stack : undefined
-  });
-});
+const errorHandler = require('./middleware/errorMiddleware');
+app.use(errorHandler);
 
 // Start server
 app.listen(PORT, () => {
