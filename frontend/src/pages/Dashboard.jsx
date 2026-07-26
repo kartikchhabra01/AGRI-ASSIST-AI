@@ -2,8 +2,6 @@ import { useState, useEffect } from 'react'
 import { motion } from 'framer-motion'
 import { useNavigate } from 'react-router-dom'
 import {
-  Activity,
-  BarChart3,
   Cloud,
   CloudRain,
   Droplets,
@@ -12,7 +10,6 @@ import {
   Sprout,
   Sun,
   Thermometer,
-  TrendingUp,
   Wind,
   Calendar,
   Clock,
@@ -26,14 +23,12 @@ import {
   Sun as SunIcon,
   Moon,
   ThermometerSun,
-  Gauge,
   Eye,
-  Waves,
   ArrowUpRight,
 } from 'lucide-react'
 import Navbar from '../components/Navbar'
 import Footer from '../components/Footer'
-import { Loader, Skeleton, CardSkeleton, StatsSkeleton, ErrorState } from '../components/ui'
+import { Loader, CardSkeleton, StatsSkeleton, ErrorState } from '../components/ui'
 import { dashboardAPI, authAPI, aiAPI } from '../services/api'
 
 // Quick Actions Data
@@ -104,8 +99,7 @@ function Dashboard() {
           if (chatResponse.success) {
             setChatHistory(chatResponse.data || chatResponse.chats || [])
           }
-        } catch (error) {
-          console.error('Failed to fetch chat history:', error)
+        } catch {
           setChatHistory([])
         }
 
@@ -124,16 +118,15 @@ function Dashboard() {
               cropsQueried: backendData.cropsQueried || [],
               lastActivity: backendData.lastActivity,
               reportsBySeverity: backendData.reportsBySeverity || null,
+              farmHealth: backendData.farmHealth ?? null,
               imageUploads: backendData.imageUploads ?? null,
             })
-            // Farm health not available from backend
-            setFarmHealth(null)
+            setFarmHealth(backendData.farmHealth ?? null)
           } else {
             setAnalytics({})
             setFarmHealth(null)
           }
-        } catch (error) {
-          console.error('Failed to fetch analytics:', error)
+        } catch {
           setAnalytics({})
           setFarmHealth(null)
         }
@@ -148,7 +141,6 @@ function Dashboard() {
               setWeatherError('Weather data unavailable')
             }
           } catch (error) {
-            console.error('Failed to fetch weather:', error)
             setWeatherError(error.message || 'Failed to load weather')
           }
         } else {
@@ -157,8 +149,7 @@ function Dashboard() {
         setWeatherLoading(false)
 
         setLoading(false)
-      } catch (error) {
-        console.error('Failed to fetch dashboard data:', error)
+      } catch {
         // Don't show error toast, just continue with partial data
         setLoading(false)
       }
@@ -268,8 +259,10 @@ function Dashboard() {
           cropsQueried: data.cropsQueried || [],
           lastActivity: data.lastActivity,
           reportsBySeverity: data.reportsBySeverity || null,
+          farmHealth: data.farmHealth ?? null,
           imageUploads: data.imageUploads ?? null,
         })
+        setFarmHealth(data.farmHealth ?? null)
       }
     } catch (error) {
       setAnalyticsError(error.message || 'Failed to load analytics')
@@ -277,32 +270,24 @@ function Dashboard() {
   }
 
   const getAIRecommendation = () => {
-    if (!weather) return 'Weather data unavailable'
-    if (!analytics) return 'Loading recommendations...'
-    
+    if (!weather) {
+      return user?.farmLocation
+        ? `Weather data for ${user.farmLocation} is unavailable right now. Ask the assistant for crop-specific guidance.`
+        : 'Set your farm location to receive weather-aware crop guidance.'
+    }
+
+    const crop = user?.cropType ? ` for your ${user.cropType} crop` : ''
+    const location = user?.farmLocation ? ` in ${user.farmLocation}` : ''
     const recommendations = []
-    
-    if (weather.temperature > 25 && weather.humidity < 70) {
-      recommendations.push('Good weather for irrigation today.')
-    }
-    
-    if (weather.rainChance > 30) {
-      recommendations.push('Rain expected - avoid pesticide spraying.')
-    }
-    
-    if (weather.temperature > 35) {
-      recommendations.push('High temperature - ensure adequate irrigation.')
-    }
-    
-    if (weather.humidity > 80) {
-      recommendations.push('High humidity - monitor for fungal diseases.')
-    }
-    
-    if (recommendations.length === 0) {
-      return 'Weather conditions are favorable. Continue regular farming activities.'
-    }
-    
-    return recommendations.join(' ')
+
+    if (weather.rainChance >= 30) recommendations.push('Rain is possible, so postpone pesticide spraying if practical.')
+    if (weather.temperature >= 35) recommendations.push('High heat calls for checking soil moisture and irrigation.')
+    if (weather.humidity >= 80) recommendations.push('High humidity increases fungal-risk monitoring.')
+    if (weather.temperature > 25 && weather.humidity < 70) recommendations.push('Conditions are suitable for planned irrigation.')
+
+    return recommendations.length
+      ? `${recommendations.join(' ')}${crop}${location}.`
+      : `Current conditions look stable${crop}${location}; continue your normal field checks.`
   }
 
   if (loading) {
@@ -350,7 +335,8 @@ function Dashboard() {
           </motion.div>
 
           {/* Empty State for New Users */}
-          {isNewUser ? (
+          <>
+          {isNewUser && (
             <motion.div
               initial={{ opacity: 0, y: 20 }}
               animate={{ opacity: 1, y: 0 }}
@@ -385,7 +371,8 @@ function Dashboard() {
                 </div>
               </div>
             </motion.div>
-          ) : (
+          )}
+
             <>
               {/* Top Row: Weather + Farm Health */}
               <div className="mb-6 grid grid-cols-1 gap-4 sm:grid-cols-2 lg:mb-8">
@@ -500,8 +487,26 @@ function Dashboard() {
                   <h3 className="text-lg font-semibold text-slate-900 dark:text-white">
                     Farm Health
                   </h3>
-                  <p className="text-sm text-slate-500 dark:text-slate-400">A health score is not available yet.</p>
-                  
+                  {farmHealth === null ? (
+                    <div className="mt-6 rounded-xl border border-dashed border-slate-200 p-5 text-center dark:border-zinc-700">
+                      <Sprout className="mx-auto h-8 w-8 text-agri-600" />
+                      <p className="mt-3 text-sm font-medium text-slate-800 dark:text-slate-200">
+                        No crop reports available yet.
+                      </p>
+                      <p className="mt-1 text-sm text-slate-500 dark:text-slate-400">
+                        Upload your first crop image to generate a health score.
+                      </p>
+                      <button
+                        onClick={() => navigate('/chat')}
+                        className="mt-4 inline-flex items-center gap-2 rounded-lg bg-agri-600 px-3 py-2 text-sm font-semibold text-white transition-colors hover:bg-agri-700"
+                      >
+                        <ImageIcon className="h-4 w-4" />
+                        Analyze Crop Image
+                      </button>
+                    </div>
+                  ) : (
+                    <>
+                  <p className="text-sm text-slate-500 dark:text-slate-400">Derived from your saved crop-report severity.</p>
                   <div className="mt-6 flex items-center justify-center">
                     <div className="relative h-32 w-32">
                       <svg className="h-full w-full transform -rotate-90">
@@ -535,10 +540,11 @@ function Dashboard() {
                       </div>
                     </div>
                   </div>
-
                   <p className="mt-4 text-center text-sm text-slate-500 dark:text-slate-400">
-                    Add crop reports to track report severity below.
+                    Based on your saved crop reports.
                   </p>
+                    </>
+                  )}
                 </motion.div>
                 )}
               </div>
@@ -631,7 +637,7 @@ function Dashboard() {
                   </p>
                   
                   <div className="mt-4 space-y-3">
-                    {analytics?.reportsBySeverity ? (
+                    {analytics?.totalReports > 0 && analytics.reportsBySeverity ? (
                       <>
                         <div className="flex items-center justify-between">
                           <div className="flex items-center gap-2">
@@ -662,7 +668,9 @@ function Dashboard() {
                         </div>
                       </>
                     ) : (
-                      <p className="text-sm text-slate-500 dark:text-slate-400">No crop report data available</p>
+                      <div className="rounded-xl border border-dashed border-slate-200 p-4 text-center dark:border-zinc-700">
+                        <p className="text-sm text-slate-500 dark:text-slate-400">No crop reports available yet.</p>
+                      </div>
                     )}
                   </div>
                 </motion.div>
@@ -688,7 +696,7 @@ function Dashboard() {
                   </p>
                   
                   <div className="mt-4 grid grid-cols-2 gap-4">
-                    {analytics?.imageUploads !== null && analytics?.imageUploads !== undefined ? (
+                    {analytics?.imageUploads > 0 ? (
                       <>
                         <div className="col-span-2 rounded-xl bg-slate-50 p-3 dark:bg-zinc-800">
                           <p className="text-xs text-slate-500 dark:text-slate-400">Uploaded</p>
@@ -699,7 +707,7 @@ function Dashboard() {
                       </>
                     ) : (
                       <div className="col-span-2 rounded-xl bg-slate-50 p-3 dark:bg-zinc-800">
-                        <p className="text-sm text-slate-500 dark:text-slate-400 text-center">No image analysis data</p>
+                        <p className="text-sm text-slate-500 dark:text-slate-400 text-center">No image analyses yet.</p>
                       </div>
                     )}
                   </div>
@@ -815,7 +823,7 @@ function Dashboard() {
                 </div>
               </motion.div>
             </>
-          )}
+          </>
         </div>
       </main>
       <Footer />

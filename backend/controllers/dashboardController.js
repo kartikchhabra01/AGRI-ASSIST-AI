@@ -121,6 +121,18 @@ const getUserStats = async (req, res, next) => {
       if (_id in reportsBySeverity) reportsBySeverity[_id] = count;
     });
 
+    // This score is derived solely from saved crop-report severity values.
+    // It is deliberately absent until the user has submitted a report.
+    const severityScores = { Low: 100, Moderate: 60, High: 20 };
+    const farmHealth = totalReports > 0
+      ? Math.round(
+        Object.entries(reportsBySeverity).reduce(
+          (total, [severity, count]) => total + severityScores[severity] * count,
+          0
+        ) / totalReports
+      )
+      : null;
+
     // Get recent queries (last 7 days)
     const sevenDaysAgo = new Date();
     sevenDaysAgo.setDate(sevenDaysAgo.getDate() - 7);
@@ -164,6 +176,7 @@ const getUserStats = async (req, res, next) => {
         cropsQueried,
         lastActivity,
         reportsBySeverity,
+        farmHealth,
         imageUploads: imageAnalyses[0]?.count || 0
       }
     });

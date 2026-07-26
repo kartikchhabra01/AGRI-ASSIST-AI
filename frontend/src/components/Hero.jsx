@@ -1,6 +1,7 @@
 import { Link } from 'react-router-dom'
 import { motion } from 'framer-motion'
 import { ArrowRight, Sparkles, Sprout } from 'lucide-react'
+import { authAPI } from '../services/api'
 
 const containerVariants = {
   hidden: { opacity: 0 },
@@ -20,6 +21,8 @@ const itemVariants = {
 }
 
 function Hero() {
+  const getStartedPath = authAPI.isAuthenticated() ? '/dashboard' : '/login'
+
   return (
     <section className="relative overflow-hidden bg-gradient-to-br from-agri-950 via-agri-800 to-emerald-600 px-4 pb-20 pt-32 sm:px-6 sm:pb-28 sm:pt-36 lg:pb-32 lg:pt-40">
       <div
@@ -80,7 +83,7 @@ function Hero() {
             className="mt-10 flex flex-col items-center gap-4 sm:flex-row sm:justify-center lg:justify-start"
           >
             <Link
-              to="/login"
+              to={getStartedPath}
               className="group inline-flex w-full items-center justify-center gap-2 rounded-xl bg-white px-8 py-3.5 text-sm font-semibold text-agri-800 shadow-xl shadow-black/10 transition-all duration-300 hover:-translate-y-0.5 hover:bg-agri-50 hover:shadow-2xl sm:w-auto"
             >
               Get Started
@@ -115,21 +118,9 @@ function Hero() {
                   Your AI Farming Companion
                 </p>
               </div>
-              <div className="grid w-full grid-cols-3 gap-3">
-                {[
-                  { label: 'Crops', value: '50+' },
-                  { label: 'Accuracy', value: '94%' },
-                  { label: 'Farmers', value: '10K+' },
-                ].map((stat) => (
-                  <div
-                    key={stat.label}
-                    className="rounded-xl bg-white/10 px-3 py-4 backdrop-blur-sm"
-                  >
-                    <p className="text-xl font-bold text-white">{stat.value}</p>
-                    <p className="mt-1 text-xs text-agri-200">{stat.label}</p>
-                  </div>
-                ))}
-              </div>
+              <p className="max-w-sm text-sm leading-relaxed text-agri-100/85">
+                Ask questions, analyze crop images, and keep your farm activity in one place.
+              </p>
             </div>
           </div>
         </motion.div>

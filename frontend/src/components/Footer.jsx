@@ -1,6 +1,9 @@
-import { Link } from 'react-router-dom'
-import { Github, Linkedin, Twitter } from 'lucide-react'
+import { useEffect, useState } from 'react'
+import { Link, useLocation, useNavigate } from 'react-router-dom'
+import { Github, Linkedin } from 'lucide-react'
 import Logo from './Logo'
+import { authAPI } from '../services/api'
+import { ConfirmModal } from './ui'
 
 const footerLinks = [
   { label: 'Home', path: '/' },
@@ -11,13 +14,34 @@ const footerLinks = [
 ]
 
 const socialLinks = [
-  { label: 'Twitter', icon: Twitter, href: '#' },
-  { label: 'LinkedIn', icon: Linkedin, href: '#' },
-  { label: 'GitHub', icon: Github, href: '#' },
+  { label: 'LinkedIn', icon: Linkedin, href: 'https://www.linkedin.com/in/kartik-chhabra-927286289' },
+  { label: 'GitHub', icon: Github, href: 'https://github.com/kartikchhabra01' },
 ]
 
 function Footer() {
+  const location = useLocation()
+  const navigate = useNavigate()
   const currentYear = new Date().getFullYear()
+  const [isAuthenticated, setIsAuthenticated] = useState(authAPI.isAuthenticated())
+  const [showLogoutPrompt, setShowLogoutPrompt] = useState(false)
+
+  useEffect(() => {
+    setIsAuthenticated(authAPI.isAuthenticated())
+  }, [location])
+
+  const handleLoginClick = () => {
+    if (isAuthenticated) {
+      setShowLogoutPrompt(true)
+      return
+    }
+    navigate('/login')
+  }
+
+  const handleLogout = () => {
+    authAPI.logout()
+    setShowLogoutPrompt(false)
+    navigate('/login')
+  }
 
   return (
     <footer className="border-t border-agri-100 bg-white/80 backdrop-blur-sm transition-colors duration-300 dark:border-zinc-800 dark:bg-zinc-950/80">
@@ -38,12 +62,22 @@ function Footer() {
             <ul className="mt-4 space-y-3">
               {footerLinks.map((link) => (
                 <li key={link.path}>
-                  <Link
-                    to={link.path}
-                    className="text-sm text-slate-600 transition-colors hover:text-agri-600 dark:text-slate-400 dark:hover:text-agri-400"
-                  >
-                    {link.label}
-                  </Link>
+                  {link.path === '/login' ? (
+                    <button
+                      type="button"
+                      onClick={handleLoginClick}
+                      className="text-sm text-slate-600 transition-colors hover:text-agri-600 dark:text-slate-400 dark:hover:text-agri-400"
+                    >
+                      {link.label}
+                    </button>
+                  ) : (
+                    <Link
+                      to={link.path}
+                      className="text-sm text-slate-600 transition-colors hover:text-agri-600 dark:text-slate-400 dark:hover:text-agri-400"
+                    >
+                      {link.label}
+                    </Link>
+                  )}
                 </li>
               ))}
             </ul>
@@ -59,6 +93,8 @@ function Footer() {
                   key={social.label}
                   href={social.href}
                   aria-label={social.label}
+                  target="_blank"
+                  rel="noreferrer"
                   className="flex h-10 w-10 items-center justify-center rounded-xl border border-agri-100 bg-agri-50 text-agri-700 transition-all duration-200 hover:border-agri-300 hover:bg-agri-100 hover:text-agri-800 dark:border-zinc-700 dark:bg-zinc-800 dark:text-agri-400 dark:hover:border-agri-600 dark:hover:bg-zinc-700"
                 >
                   <social.icon className="h-4 w-4" />
@@ -77,6 +113,15 @@ function Footer() {
           </p>
         </div>
       </div>
+      <ConfirmModal
+        isOpen={showLogoutPrompt}
+        onClose={() => setShowLogoutPrompt(false)}
+        onConfirm={handleLogout}
+        title="Already logged in"
+        message="You are already logged in. Do you want to log out?"
+        confirmText="Log out"
+        danger
+      />
     </footer>
   )
 }

@@ -31,6 +31,13 @@ const SUGGESTED_PROMPTS = [
   { icon: Sun, text: 'Weather Advice', prompt: 'How should I protect my crops from weather conditions?' }
 ]
 
+const getSpeechLanguage = (language) => ({
+  hi: 'hi-IN',
+  pa: 'pa-IN',
+  bn: 'bn-IN',
+  ta: 'ta-IN',
+}[language] || 'en-US')
+
 // Group chats by time period
 const groupChatsByTime = (chats) => {
   const now = new Date()
@@ -85,6 +92,7 @@ function AIChat() {
   const messagesEndRef = useRef(null)
   const fileInputRef = useRef(null)
   const recognitionRef = useRef(null)
+  const speechBaseInputRef = useRef('')
   const textareaRef = useRef(null)
 
   // Filter chat history based on search query
@@ -104,7 +112,11 @@ function AIChat() {
     setupSpeechRecognition()
     return () => {
       if (recognitionRef.current) {
-        recognitionRef.current.stop()
+        recognitionRef.current.onresult = null
+        recognitionRef.current.onerror = null
+        recognitionRef.current.onend = null
+        recognitionRef.current.onstart = null
+        recognitionRef.current.abort()
       }
     }
     // Speech recognition is initialized once; its language is refreshed
@@ -131,7 +143,7 @@ function AIChat() {
         setChatHistory(response.chats)
       }
     } catch {
-      console.error('Failed to load chat history')
+      // History is non-blocking; the chat remains usable without it.
     }
   }
 
@@ -143,20 +155,41 @@ function AIChat() {
       const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition
       recognitionRef.current = new SpeechRecognition()
       recognitionRef.current.continuous = false
-      recognitionRef.current.interimResults = false
-      recognitionRef.current.lang = language === 'hi' ? 'hi-IN' : 
-                                      language === 'pa' ? 'pa-IN' :
-                                      language === 'bn' ? 'bn-IN' :
-                                      language === 'ta' ? 'ta-IN' : 'en-US'
+      recognitionRef.current.interimResults = true
+      recognitionRef.current.lang = getSpeechLanguage(language)
 
-      recognitionRef.current.onresult = (event) => {
-        const transcript = event.results[0][0].transcript
-        setInput(transcript)
-        setIsRecording(false)
+      recognitionRef.current.onstart = () => {
+        setIsRecording(true)
       }
 
-      recognitionRef.current.onerror = () => {
+      recognitionRef.current.onresult = (event) => {
+        let finalTranscript = ''
+        let interimTranscript = ''
+
+        for (let index = 0; index < event.results.length; index += 1) {
+          const transcript = event.results[index][0].transcript
+          if (event.results[index].isFinal) {
+            finalTranscript += transcript
+          } else {
+            interimTranscript += transcript
+          }
+        }
+
+        setInput(`${speechBaseInputRef.current}${finalTranscript}${interimTranscript}`.trimStart())
+      }
+
+      recognitionRef.current.onerror = (event) => {
         setIsRecording(false)
+        const messages = {
+          'not-allowed': 'Microphone permission was denied. Allow microphone access and try again.',
+          'service-not-allowed': 'Speech recognition is not available in this browser.',
+          'audio-capture': 'No microphone was found. Check that a microphone is connected and available.',
+          network: 'Speech recognition network error. Check your connection and try again.',
+          'language-not-supported': 'The selected language is not supported by speech recognition in this browser.',
+          'language-unavailable': 'The selected speech-recognition language is currently unavailable.',
+          'no-speech': 'No speech was detected. Please try again.',
+        }
+        if (event.error !== 'aborted') toast.error(messages[event.error] || 'Unable to start voice input. Please try again.')
       }
 
       recognitionRef.current.onend = () => {
@@ -171,14 +204,17 @@ function AIChat() {
       return
     }
     if (recognitionRef.current) {
-      recognitionRef.current.lang = language === 'hi' ? 'hi-IN' : 
-                                      language === 'pa' ? 'pa-IN' :
-                                      language === 'bn' ? 'bn-IN' :
-                                      language === 'ta' ? 'ta-IN' : 'en-US'
-      recognitionRef.current.start()
-      setIsRecording(true)
+      try {
+        speechBaseInputRef.current = input ? `${input.trimEnd()} ` : ''
+        recognitionRef.current.lang = getSpeechLanguage(language)
+        recognitionRef.current.start()
+        setIsRecording(false)
+      } catch {
+        setIsRecording(false)
+        toast.error('Voice input is already active or unavailable. Please try again.')
+      }
     }
-  }, [language, isSpeechSupported])
+  }, [input, language, isSpeechSupported])
 
   const stopRecording = useCallback(() => {
     if (recognitionRef.current) {
@@ -352,7 +388,6 @@ function AIChat() {
         loadChatHistory()
       }
     } catch (error) {
-      console.error('AI Chat Error:', error);
       let errorMessage = 'Failed to get AI response'
       
       if (error.response?.status === 401) {
@@ -731,7 +766,7 @@ function AIChat() {
                 type="file"
                 ref={fileInputRef}
                 onChange={handleImageUpload}
-                accept="image/jpeg,image/jpg,image/png"
+                accept="image/jpeg,image/png,image/webp"
                 className="hidden"
               />
               <button
@@ -762,12 +797,15 @@ function AIChat() {
               <button
                 type="button"
                 onClick={isRecording ? stopRecording : startRecording}
-                className={`rounded-xl p-2 transition-colors shrink-0 ${
+                disabled={!isSpeechSupported && !isRecording}
+                aria-label={isRecording ? 'Stop voice input' : 'Start voice input'}
+                aria-pressed={isRecording}
+                className={`rounded-xl p-2 transition-colors shrink-0 disabled:cursor-not-allowed disabled:opacity-50 ${
                   isRecording
-                    ? 'bg-red-100 text-red-600 hover:bg-red-200 dark:bg-red-900/50 dark:text-red-400 dark:hover:bg-red-900'
+                    ? 'animate-pulse bg-red-100 text-red-600 hover:bg-red-200 dark:bg-red-900/50 dark:text-red-400 dark:hover:bg-red-900'
                     : 'text-slate-400 hover:bg-slate-100 hover:text-slate-600 dark:hover:bg-zinc-700 dark:hover:text-slate-300'
                 }`}
-                title={isRecording ? 'Stop recording' : 'Voice input'}
+                title={isSpeechSupported ? (isRecording ? 'Stop recording' : 'Voice input') : 'Voice input is not supported in this browser'}
               >
                 {isRecording ? <MicOff className="h-5 w-5" /> : <Mic className="h-5 w-5" />}
               </button>

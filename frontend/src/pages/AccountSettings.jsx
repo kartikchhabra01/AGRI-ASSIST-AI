@@ -82,8 +82,8 @@ function AccountSettings() {
       if (response.success) {
         setAdvisoryHistory(response.data)
       }
-    } catch (error) {
-      console.error('Failed to load advisory history:', error)
+    } catch {
+      // Advisory history is non-blocking for account settings.
     }
   }
 

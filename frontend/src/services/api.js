@@ -32,8 +32,7 @@ const request = async (endpoint, options = {}) => {
     },
   };
 
-  try {
-    const response = await fetch(url, config);
+  const response = await fetch(url, config);
     const contentType = response.headers.get('content-type') || '';
     const data = contentType.includes('application/json')
       ? await response.json()
@@ -59,11 +58,7 @@ const request = async (endpoint, options = {}) => {
       throw new Error(data.message || `API request failed (${response.status})`);
     }
 
-    return data;
-  } catch (error) {
-    console.error('API Error:', error);
-    throw error;
-  }
+  return data;
 };
 
 /**
