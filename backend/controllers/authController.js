@@ -291,7 +291,7 @@ const googleCallback = async (req, res, next) => {
     const token = generateToken(user._id);
 
     // Redirect to frontend with token
-    const frontendUrl = process.env.CORS_ORIGIN || 'http://localhost:5173';
+    const frontendUrl = (process.env.FRONTEND_URL || 'http://localhost:5173').replace(/\/+$/, '');
     res.redirect(`${frontendUrl}/auth/callback?token=${token}`);
   } catch (error) {
     next(error);

@@ -165,6 +165,7 @@ PORT=5000
 JWT_SECRET=your_jwt_secret_key_here
 GEMINI_API_KEY=your_gemini_api_key_here
 CORS_ORIGIN=http://localhost:5173
+FRONTEND_URL=http://localhost:5173
 MONGO_URI=mongodb+srv://username:password@cluster.mongodb.net/database?retryWrites=true&w=majority
 ```
 
@@ -204,6 +205,7 @@ The frontend will run on `http://localhost:5173`
 | JWT_SECRET | Secret key for JWT token generation | Yes |
 | GEMINI_API_KEY | Google Gemini API key for AI advisory | Yes |
 | CORS_ORIGIN | Frontend URL for CORS configuration | Yes |
+| FRONTEND_URL | Frontend URL used after Google OAuth completes | Yes for Google OAuth |
 | GOOGLE_CLIENT_ID | Google OAuth client ID | Optional |
 | GOOGLE_CLIENT_SECRET | Google OAuth client secret | Optional |
 | GOOGLE_CALLBACK_URL | Google OAuth callback URL | Optional |

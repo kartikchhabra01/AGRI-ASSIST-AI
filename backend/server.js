@@ -36,12 +36,13 @@ const aiRoutes = require('./routes/aiRoutes');
 // Initialize Express app
 const app = express();
 const PORT = process.env.PORT || 5000;
+const FRONTEND_URL = process.env.FRONTEND_URL || process.env.CORS_ORIGIN || `http://localhost:${process.env.FRONTEND_PORT || 5173}`;
 
 // Middleware
 // Chat images are sent as base64 JSON, which exceeds Express's 100kb default.
 app.use(express.json({ limit: '6mb' }));
 app.use(cors({
-  origin: process.env.CORS_ORIGIN || 'http://localhost:5173',
+  origin: FRONTEND_URL,
   credentials: true
 }));
 
