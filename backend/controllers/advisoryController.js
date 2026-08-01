@@ -4,6 +4,7 @@
  */
 
 const Query = require('../models/Query');
+const Chat = require('../models/Chat');
 const { getDiagnosis } = require('../services/aiService');
 
 /**
@@ -53,13 +54,37 @@ const getHistory = async (req, res, next) => {
   try {
     const userId = req.userId;
 
-    // Get all queries for this user, sorted by creation date (newest first)
-    const userQueries = await Query.find({ userId }).sort({ createdAt: -1 });
+    // AI Chat persists conversations in Chat, while this legacy endpoint was
+    // previously reading only Query documents. Return both existing record
+    // types so the Advisory History view reflects successful AI conversations
+    // without dropping older advisory queries.
+    const [userQueries, userChats] = await Promise.all([
+      Query.find({ userId }).sort({ createdAt: -1 }),
+      Chat.find({ userId }).sort({ updatedAt: -1 })
+    ]);
+
+    const chatsAsHistory = userChats.map(chat => {
+      const firstUserMessage = chat.messages.find(message => message.role === 'user');
+      return {
+        _id: chat._id,
+        title: chat.title,
+        crop: chat.title,
+        issue: firstUserMessage?.content || 'Image analysis',
+        messages: chat.messages,
+        language: chat.language,
+        createdAt: chat.createdAt,
+        updatedAt: chat.updatedAt,
+        source: 'chat'
+      };
+    });
+
+    const history = [...userQueries, ...chatsAsHistory]
+      .sort((a, b) => new Date(b.updatedAt || b.createdAt) - new Date(a.updatedAt || a.createdAt));
 
     res.status(200).json({
       success: true,
-      count: userQueries.length,
-      data: userQueries
+      count: history.length,
+      data: history
     });
   } catch (error) {
     next(error);
@@ -75,27 +100,23 @@ const getQueryById = async (req, res, next) => {
     const { id } = req.params;
     const userId = req.userId;
 
-    // Find the query
-    const query = await Query.findById(id);
+    // History includes both legacy advisory Query records and AI Chat
+    // conversations, so either type can be opened from this endpoint.
+    const [query, chat] = await Promise.all([
+      Query.findOne({ _id: id, userId }),
+      Chat.findOne({ _id: id, userId })
+    ]);
 
-    if (!query) {
+    if (!query && !chat) {
       return res.status(404).json({
         success: false,
-        message: 'Query not found'
-      });
-    }
-
-    // Check if user owns this query
-    if (query.userId.toString() !== userId) {
-      return res.status(403).json({
-        success: false,
-        message: 'Access denied'
+        message: 'History item not found'
       });
     }
 
     res.status(200).json({
       success: true,
-      data: query
+      data: query || chat
     });
   } catch (error) {
     next(error);
@@ -203,30 +224,24 @@ const deleteQuery = async (req, res, next) => {
     const { id } = req.params;
     const userId = req.userId;
 
-    // Find the query
-    const query = await Query.findById(id);
+    // Settings deletes an item through the Advisory API. Because that list now
+    // contains Chat-backed AI conversations too, delete the matching record
+    // from either model while always scoping the operation to its owner.
+    const [deletedQuery, deletedChat] = await Promise.all([
+      Query.findOneAndDelete({ _id: id, userId }),
+      Chat.findOneAndDelete({ _id: id, userId })
+    ]);
 
-    if (!query) {
+    if (!deletedQuery && !deletedChat) {
       return res.status(404).json({
         success: false,
-        message: 'Query not found'
+        message: 'History item not found'
       });
     }
-
-    // Check if user owns this query
-    if (query.userId.toString() !== userId) {
-      return res.status(403).json({
-        success: false,
-        message: 'Access denied'
-      });
-    }
-
-    // Delete query
-    await Query.findByIdAndDelete(id);
 
     res.status(200).json({
       success: true,
-      message: 'Query deleted successfully'
+      message: 'History item deleted successfully'
     });
   } catch (error) {
     next(error);
@@ -241,12 +256,16 @@ const deleteAllQueries = async (req, res, next) => {
   try {
     const userId = req.userId;
 
-    // Delete all user queries
-    const result = await Query.deleteMany({ userId });
+    // Delete all history records represented by this API.
+    const [queryResult, chatResult] = await Promise.all([
+      Query.deleteMany({ userId }),
+      Chat.deleteMany({ userId })
+    ]);
+    const deletedCount = queryResult.deletedCount + chatResult.deletedCount;
 
     res.status(200).json({
       success: true,
-      message: `Deleted ${result.deletedCount} queries successfully`
+      message: `Deleted ${deletedCount} history items successfully`
     });
   } catch (error) {
     next(error);

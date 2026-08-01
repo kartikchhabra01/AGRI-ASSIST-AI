@@ -124,12 +124,16 @@ const getUserStats = async (req, res, next) => {
     // This score is derived solely from saved crop-report severity values.
     // It is deliberately absent until the user has submitted a report.
     const severityScores = { Low: 100, Moderate: 60, High: 20 };
-    const farmHealth = totalReports > 0
+    const scoredReports = Object.values(reportsBySeverity).reduce(
+      (total, count) => total + count,
+      0
+    );
+    const farmHealth = scoredReports > 0
       ? Math.round(
         Object.entries(reportsBySeverity).reduce(
           (total, [severity, count]) => total + severityScores[severity] * count,
           0
-        ) / totalReports
+        ) / scoredReports
       )
       : null;
 

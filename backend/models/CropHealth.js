@@ -13,21 +13,35 @@ const cropHealthSchema = new mongoose.Schema({
   },
   crop: {
     type: String,
-    required: [true, 'Crop name is required'],
     trim: true,
+    default: null,
     minlength: [2, 'Crop name must be at least 2 characters long']
   },
   disease: {
     type: String,
-    required: [true, 'Disease name is required'],
     trim: true,
+    default: null,
     minlength: [2, 'Disease name must be at least 2 characters long']
   },
   severity: {
     type: String,
-    required: [true, 'Severity is required'],
     enum: ['Low', 'Moderate', 'High'],
+    // Preserve the existing report baseline when Gemini does not explicitly
+    // classify severity; explicit values from the analysis take precedence.
     default: 'Moderate'
+  },
+  diagnosis: {
+    type: String,
+    default: null
+  },
+  recommendation: {
+    type: String,
+    default: null
+  },
+  chatId: {
+    type: mongoose.Schema.Types.ObjectId,
+    ref: 'Chat',
+    default: null
   },
   affectedArea: {
     type: String,

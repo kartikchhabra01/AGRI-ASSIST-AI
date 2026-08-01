@@ -51,7 +51,7 @@ AGRI ASSIST AI is a full-stack web application designed to provide instant agric
 - Google OAuth 2.0 - Social login integration
 
 ### AI Integration
-- Google Gemini API (gemini-1.5-flash) - AI advisory generation with conversation context
+- Google Gemini API - AI advisory generation with conversation context
 - @google/generative-ai - Official Gemini SDK for Node.js
 - Gemini Vision - Image analysis for crop disease detection
 - Browser Speech Recognition API - Voice input
@@ -110,7 +110,7 @@ AGRI-ASSIST-AI/
 │   │   └── dashboardController.js
 │   ├── middleware/             # Express middleware
 │   │   ├── authMiddleware.js
-│   │   ├── errorHandler.js
+│   │   ├── errorMiddleware.js
 │   │   ├── validator.js        # Input validation
 │   │   └── rateLimiter.js      # Rate limiting
 │   ├── models/                 # Mongoose models
@@ -244,12 +244,12 @@ To enable Google OAuth login:
 
 ### Advisory Routes (`/api/advisory`)
 - `POST /api/advisory/chat` - Submit a new advisory query (protected)
-- `GET /api/advisory/history` - Get query history (protected)
-- `GET /api/advisory/history/:id` - Get specific query (protected)
+- `GET /api/advisory/history` - Get advisory queries and AI conversation history (protected)
+- `GET /api/advisory/history/:id` - Get a history item (protected)
 - `GET /api/advisory/search?q=` - Search queries (protected)
 - `PUT /api/advisory/:id` - Update a query (protected)
-- `DELETE /api/advisory/:id` - Delete a query (protected)
-- `DELETE /api/advisory/all` - Delete all queries (protected)
+- `DELETE /api/advisory/:id` - Delete an advisory query or AI conversation (protected)
+- `DELETE /api/advisory/all` - Delete all advisory history items (protected)
 
 ### Crop Routes (`/api/crop`)
 - `POST /api/crop/report` - Submit crop health report (protected)
@@ -314,9 +314,12 @@ To enable Google OAuth login:
 {
   _id: ObjectId,
   userId: ObjectId (ref: User),
-  crop: String (required, min 2 chars),
-  disease: String (required, min 2 chars),
-  severity: String (enum: Low, Moderate, High),
+  crop: String (optional, min 2 chars when provided),
+  disease: String (optional, min 2 chars when provided),
+  severity: String (enum: Low, Moderate, High; default: Moderate),
+  diagnosis: String (optional),
+  recommendation: String (optional),
+  chatId: ObjectId (ref: Chat, optional),
   affectedArea: String (optional),
   createdAt: Date,
   updatedAt: Date
@@ -489,6 +492,14 @@ To enable Google OAuth login:
   - Tables, lists, code blocks
   - Proper styling with Tailwind CSS
 
+### Week 9: Persistence and Dashboard Data Flow
+- Fixed Advisory History to include persisted AI Chat conversations as well as legacy advisory queries.
+- Added CropHealth creation after successful Gemini image analysis, linked to the authenticated user and source chat.
+- Stored diagnosis, recommendation, available crop/disease details, and severity with each image-analysis report.
+- Preserved the existing Moderate severity baseline when Gemini does not explicitly classify severity.
+- Updated Advisory History deletion to remove the matching chat or advisory record.
+- Corrected Farm Health calculation to use only valid stored severity values.
+
 ## Architecture
 
 ### System Architecture
@@ -515,7 +526,7 @@ To enable Google OAuth login:
 3. Backend authenticates via JWT middleware
 4. Controller processes request with Mongoose models
 5. Data stored/retrieved from MongoDB Atlas
-6. For advisory queries, Gemini API generates recommendations
+6. Gemini generates recommendations; completed chats and image reports are persisted in MongoDB
 7. Response sent back to frontend
 8. Frontend updates UI with new data
 
@@ -547,10 +558,6 @@ To enable Google OAuth login:
 
 ## Future Improvements
 
-- **Enhance Gemini API**: Crop-specific intelligent recommendations with disease diagnosis
-- **Multilingual Support**: Add Hindi and other regional language support
-- **Weather APIs**: Integrate weather data for context-aware recommendations
-- **Image Recognition**: Allow users to upload crop images for disease detection
 - **Expert Verification**: Connect with agricultural experts for critical advice verification
 - **Mobile App**: Develop native mobile applications (iOS/Android)
 - **Offline Mode**: Enable offline functionality with data synchronization

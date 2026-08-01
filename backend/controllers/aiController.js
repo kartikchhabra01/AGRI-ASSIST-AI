@@ -1,12 +1,32 @@
 const mongoose = require('mongoose');
 const Chat = require('../models/Chat');
-const { generateResponse, analyzeImage } = require('../services/aiService');
+const CropHealth = require('../models/CropHealth');
+const User = require('../models/User');
+const { generateResponse } = require('../services/aiService');
+
+const getLabeledSection = (content, labels) => {
+  const labelPattern = labels.map(label => label.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')).join('|');
+  const heading = '(?:Diagnosis|Recommendation|Likely disease|Disease|Severity|Treatment|Condition)';
+  const match = content.match(new RegExp(`(?:^|\\n)\\s*(?:#{1,6}\\s*)?(?:\\*\\*)?(?:${labelPattern})(?:\\s*[:\\-])?(?:\\*\\*)?\\s*[:\\-]?\\s*([\\s\\S]*?)(?=\\n\\s*(?:#{1,6}\\s*)?(?:\\*\\*)?${heading}(?:\\s*[:\\-])?(?:\\*\\*)?\\s*[:\\-]?|$)`, 'i'));
+  return match?.[1]?.trim() || null;
+};
+
+const getCropFromPrompt = (message) => {
+  const match = message?.match(/(?:crop|plant)\s*[:\-]\s*([a-z][a-z\s-]{1,49})/i);
+  return match?.[1]?.trim() || null;
+};
+
+const getSeverityFromResponse = (content) => {
+  const severity = getLabeledSection(content, ['Severity']);
+  const match = severity?.match(/\b(low|moderate|high)\b/i);
+  return match ? `${match[1][0].toUpperCase()}${match[1].slice(1).toLowerCase()}` : null;
+};
 
 /**
  * Send message to AI and get response
  * POST /api/ai/chat
  */
-const sendMessage = async (req, res) => {
+const sendMessage = async (req, res, next) => {
   try {
     const { message, chatId, image, language = 'en' } = req.body;
     const userId = req.userId;
@@ -71,17 +91,34 @@ const sendMessage = async (req, res) => {
 
     await chat.save();
 
+    // Image messages are the crop-analysis workflow. Persist a report using
+    // only values returned by Gemini or already saved in the user's profile.
+    if (image) {
+      const user = await User.findById(userId).select('cropType');
+      const diagnosis = getLabeledSection(aiResponse, ['Diagnosis', 'Likely disease', 'Disease']) || aiResponse;
+      const recommendation = getLabeledSection(aiResponse, ['Recommendation', 'Treatment', 'Recommended treatment']);
+
+      const severity = getSeverityFromResponse(aiResponse);
+      const report = {
+        userId,
+        chatId: chat._id,
+        crop: getCropFromPrompt(message) || user?.cropType || null,
+        disease: getLabeledSection(aiResponse, ['Likely disease', 'Disease', 'Condition']),
+        diagnosis,
+        recommendation
+      };
+      if (severity) report.severity = severity;
+
+      await CropHealth.create(report);
+    }
+
     res.json({
       success: true,
       chatId: chat._id,
       message: assistantMessage
     });
   } catch (error) {
-    console.error('Send Message Error:', error);
-    res.status(500).json({
-      success: false,
-      message: 'Failed to send message'
-    });
+    next(error);
   }
 };
 
