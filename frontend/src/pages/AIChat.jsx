@@ -4,7 +4,7 @@ import { motion, AnimatePresence } from 'framer-motion'
 import { 
   Bot, Send, User, Plus, Trash2, Image as ImageIcon, 
   Mic, MicOff, Volume2, MessageSquare, X, ChevronLeft,
-  Sparkles, Leaf, Droplets, Bug, Sun, Sprout, Search
+  Sparkles, Leaf, Droplets, Bug, Sun, Sprout, Search, Menu
 } from 'lucide-react'
 import ReactMarkdown from 'react-markdown'
 import remarkGfm from 'remark-gfm'
@@ -77,7 +77,7 @@ function AIChat() {
   const [loading, setLoading] = useState(false)
   const [chatId, setChatId] = useState(null)
   const [chatHistory, setChatHistory] = useState([])
-  const [sidebarOpen, setSidebarOpen] = useState(true)
+  const [sidebarOpen, setSidebarOpen] = useState(window.innerWidth >= 768)
   const [selectedImage, setSelectedImage] = useState(null)
   const [imagePreview, setImagePreview] = useState(null)
   const [isRecording, setIsRecording] = useState(false)
@@ -285,6 +285,8 @@ function AIChat() {
     if (window.innerWidth < 768) {
       setSidebarOpen(false)
     }
+    // Focus input after creating new chat
+    setTimeout(() => textareaRef.current?.focus(), 100)
   }, [])
 
   const loadChat = useCallback(async (chatId) => {
@@ -308,8 +310,11 @@ function AIChat() {
     const requestedChatId = searchParams.get('chatId')
     if (requestedChatId) {
       loadChat(requestedChatId)
+    } else {
+      // No chatId requested, create new empty chat
+      createNewChat()
     }
-  }, [loadChat, searchParams])
+  }, [loadChat, searchParams, createNewChat])
 
   const deleteChat = useCallback(async (id, e) => {
     e.stopPropagation()
@@ -452,41 +457,60 @@ function AIChat() {
   }
 
   return (
-    <div className="flex h-screen bg-slate-50 transition-colors duration-300 dark:bg-zinc-950">
+    <div className="flex h-screen bg-slate-50 transition-colors duration-300 dark:bg-zinc-950 overflow-hidden">
       <Navbar />
       
       {/* Sidebar */}
       <AnimatePresence>
         {sidebarOpen && (
-          <motion.div
-            initial={{ x: -280 }}
-            animate={{ x: 0 }}
-            exit={{ x: -280 }}
-            transition={{ type: 'spring', damping: 25, stiffness: 300 }}
-            className="fixed left-0 top-20 z-40 h-[calc(100vh-80px)] w-[280px] border-r border-slate-200 bg-white dark:border-zinc-700 dark:bg-zinc-900 md:relative md:top-0 md:h-screen"
-          >
-            <div className="flex h-full flex-col">
-              {/* Search */}
-              <div className="px-4 pb-4 pt-4">
-                <div className="relative">
-                  <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-slate-400" />
-                  <input
-                    type="text"
-                    placeholder="Search chats..."
-                    value={searchQuery}
-                    onChange={(e) => setSearchQuery(e.target.value)}
-                    className="w-full rounded-lg border border-slate-200 bg-slate-50 pl-9 pr-9 py-2 text-sm text-slate-900 placeholder:text-slate-400 focus:border-agri-500 focus:outline-none focus:ring-2 focus:ring-agri-500/20 dark:border-zinc-700 dark:bg-zinc-800 dark:text-white dark:placeholder:text-slate-500 dark:focus:border-agri-500"
-                  />
-                  {searchQuery && (
-                    <button
-                      onClick={() => setSearchQuery('')}
-                      className="absolute right-3 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-600 dark:hover:text-slate-300"
-                    >
-                      <X className="h-4 w-4" />
-                    </button>
-                  )}
+          <>
+            {/* Mobile Overlay */}
+            <motion.div
+              initial={{ opacity: 0 }}
+              animate={{ opacity: 1 }}
+              exit={{ opacity: 0 }}
+              onClick={() => setSidebarOpen(false)}
+              className="fixed inset-0 z-40 bg-black/50 md:hidden"
+            />
+            <motion.div
+              initial={{ x: -280 }}
+              animate={{ x: 0 }}
+              exit={{ x: -280 }}
+              transition={{ type: 'spring', damping: 25, stiffness: 300 }}
+              className="fixed left-0 top-20 z-50 h-[calc(100vh-80px)] w-[85%] max-w-[320px] border-r border-slate-200 bg-white dark:border-zinc-700 dark:bg-zinc-900 md:relative md:top-0 md:h-screen md:w-[280px] md:max-w-none md:z-40"
+            >
+              <div className="flex h-full flex-col">
+                {/* Mobile Close Button */}
+                <div className="flex items-center justify-between border-b border-slate-200 px-4 py-3 dark:border-zinc-700 md:hidden">
+                  <span className="text-sm font-semibold text-slate-900 dark:text-white">Conversations</span>
+                  <button
+                    onClick={() => setSidebarOpen(false)}
+                    className="rounded-lg p-1.5 text-slate-400 hover:bg-slate-100 hover:text-slate-600 dark:hover:bg-zinc-800 dark:hover:text-slate-300"
+                  >
+                    <X className="h-5 w-5" />
+                  </button>
                 </div>
-              </div>
+                {/* Search */}
+                <div className="px-4 pb-4 pt-4">
+                  <div className="relative">
+                    <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-slate-400" />
+                    <input
+                      type="text"
+                      placeholder="Search chats..."
+                      value={searchQuery}
+                      onChange={(e) => setSearchQuery(e.target.value)}
+                      className="w-full rounded-lg border border-slate-200 bg-slate-50 pl-9 pr-9 py-2 text-sm text-slate-900 placeholder:text-slate-400 focus:border-agri-500 focus:outline-none focus:ring-2 focus:ring-agri-500/20 dark:border-zinc-700 dark:bg-zinc-800 dark:text-white dark:placeholder:text-slate-500 dark:focus:border-agri-500"
+                    />
+                    {searchQuery && (
+                      <button
+                        onClick={() => setSearchQuery('')}
+                        className="absolute right-3 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-600 dark:hover:text-slate-300"
+                      >
+                        <X className="h-4 w-4" />
+                      </button>
+                    )}
+                  </div>
+                </div>
 
               {/* Chat History */}
               <div className="flex-1 overflow-y-auto px-3 pb-4">
@@ -599,18 +623,19 @@ function AIChat() {
               </div>
             </div>
           </motion.div>
+          </>
         )}
       </AnimatePresence>
 
       {/* Main Chat Area */}
-      <div className="flex flex-1 flex-col pt-16 md:pt-0 overflow-hidden">
+      <div className="flex flex-1 flex-col pt-16 md:pt-0 overflow-hidden h-full">
         {/* Header */}
         <div className="flex items-center gap-3 border-b border-slate-200 bg-white px-3 py-2 dark:border-zinc-700 dark:bg-zinc-900 sm:px-4 md:px-6 shrink-0">
           <button
             onClick={() => setSidebarOpen(!sidebarOpen)}
             className="rounded-lg p-2 hover:bg-slate-100 dark:hover:bg-zinc-800 md:hidden"
           >
-            {sidebarOpen ? <ChevronLeft className="h-5 w-5" /> : <MessageSquare className="h-5 w-5" />}
+            <Menu className="h-5 w-5" />
           </button>
           <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg bg-gradient-to-br from-agri-500 to-agri-700 text-white shadow-lg shadow-agri-500/20">
             <Bot className="h-4 w-4" />
@@ -624,8 +649,8 @@ function AIChat() {
         </div>
 
         {/* Messages */}
-        <div className="flex-1 overflow-y-auto px-3 py-4 sm:px-4 md:px-6">
-          <div className="mx-auto max-w-[760px]">
+        <div className="flex-1 overflow-y-auto px-3 py-4 sm:px-4 md:px-6 overflow-x-hidden pb-24 md:pb-4">
+          <div className="mx-auto max-w-[760px] w-full">
             {isWelcomeScreen && messages.length === 0 ? (
               <WelcomeScreen onPromptClick={handlePromptClick} />
             ) : (
@@ -649,7 +674,7 @@ function AIChat() {
                         {msg.role === 'user' ? <User className="h-4 w-4" /> : <Bot className="h-4 w-4" />}
                       </div>
                       
-                      <div className={`flex max-w-[85%] flex-col ${msg.role === 'user' ? 'items-end' : 'items-start'}`}>
+                      <div className={`flex max-w-[85%] flex-col ${msg.role === 'user' ? 'items-end' : 'items-start'} sm:max-w-[70%]`}>
                         <div
                           className={`rounded-2xl px-4 py-3 ${
                             msg.role === 'user'
@@ -661,11 +686,11 @@ function AIChat() {
                             <img
                               src={msg.image}
                               alt="Uploaded"
-                              className="mb-2 max-h-48 w-full rounded-lg object-cover"
+                              className="mb-2 max-h-48 w-full max-w-[200px] rounded-lg object-cover"
                             />
                           )}
                           {msg.role === 'assistant' ? (
-                            <div className="prose prose-sm max-w-none dark:prose-invert prose-headings:text-slate-900 prose-p:text-slate-700 dark:prose-headings:text-white dark:prose-p:text-slate-300">
+                            <div className="prose prose-sm max-w-none dark:prose-invert prose-headings:text-slate-900 prose-p:text-slate-700 dark:prose-headings:text-white dark:prose-p:text-slate-300 prose-pre:max-w-[calc(100vw-8rem)] md:prose-pre:max-w-none">
                               <ReactMarkdown remarkPlugins={[remarkGfm]}>
                                 {msg.content}
                               </ReactMarkdown>
@@ -743,13 +768,13 @@ function AIChat() {
         </div>
 
         {/* Input Area */}
-        <div className="border-t border-slate-200 bg-white p-3 dark:border-zinc-700 dark:bg-zinc-900 shrink-0 sm:p-4">
+        <div className="border-t border-slate-200 bg-white p-3 dark:border-zinc-700 dark:bg-zinc-900 shrink-0 sm:p-4 fixed bottom-0 left-0 right-0 z-30 md:relative md:z-auto">
           {imagePreview && (
             <div className="mb-3 relative inline-block">
               <img
                 src={imagePreview}
                 alt="Preview"
-                className="h-24 w-24 rounded-lg object-cover shadow-md sm:h-28 sm:w-28"
+                className="h-20 w-20 rounded-lg object-cover shadow-md sm:h-28 sm:w-28"
               />
               <button
                 onClick={removeImage}
@@ -775,7 +800,7 @@ function AIChat() {
                 className="rounded-xl p-2 text-slate-400 hover:bg-slate-100 hover:text-slate-600 dark:hover:bg-zinc-700 dark:hover:text-slate-300 transition-colors shrink-0"
                 title="Upload image"
               >
-                <ImageIcon className="h-5 w-5 sm:h-5 sm:w-5" />
+                <ImageIcon className="h-5 w-5" />
               </button>
 
               <textarea
